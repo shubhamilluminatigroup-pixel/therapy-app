@@ -15,6 +15,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { listHomeCategories, listHomeTopMedia } from "../../lib/api";
 import { HomeCategoryGroup, HomeTopMediaItem } from "../../types/backend";
 
+// ✅ LOCAL VIDEO (place file in assets/videos/)
+const localIntroVideo = require("../../assets/images/intro.mp4");
+
 export default function HomeScreen() {
   const router = useRouter();
 
@@ -47,14 +50,12 @@ export default function HomeScreen() {
   }, []);
 
   const groupedCategories = useMemo(() => categories, [categories]);
+
   const allCourses = useMemo(
     () => categories.flatMap((category) => category.courses),
     [categories]
   );
-  const introVideoCourse = useMemo(
-    () => allCourses.find((course) => course.demoVideoUrl) ?? null,
-    [allCourses]
-  );
+
   const featuredImageCourses = useMemo(
     () =>
       allCourses
@@ -62,19 +63,19 @@ export default function HomeScreen() {
         .slice(0, 5),
     [allCourses]
   );
-  const introVideoUrl = introVideoCourse?.demoVideoUrl || "";
-  const introVideoIsDirectFile = useMemo(() => {
-    const normalizedUrl = (introVideoUrl || "").toLowerCase().split("?")[0] ?? "";
-    return /\.(mp4|mov|m4v|webm|mkv|m3u8)$/.test(normalizedUrl);
-  }, [introVideoUrl]);
-  const featuredVideoPlayer = useVideoPlayer(
-    introVideoUrl && introVideoIsDirectFile ? { uri: introVideoUrl } : null,
-    (player) => {
-      player.loop = false;
-      player.muted = false;
-      player.timeUpdateEventInterval = 1;
-    }
-  );
+
+  // ✅ VIDEO PLAYER USING LOCAL FILE
+  const [isFinished, setIsFinished] = useState(false);
+
+  const featuredVideoPlayer = useVideoPlayer(localIntroVideo, (player) => {
+    player.loop = false;        // ❌ no loop
+    player.muted = false;       // 🔊 sound ON
+    player.play();              // ▶️ autoplay
+
+    player.addListener("playToEnd", () => {
+      setIsFinished(true);      // ✅ show replay button
+    });
+  });
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategory((prev) => (prev === categoryId ? null : categoryId));
@@ -108,73 +109,54 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.heading}>Explore Courses</Text>
             <Text style={styles.subheading}>
-              Find the right therapy category for your journey
+              Find the right therapy  for your journey
             </Text>
 
-            {introVideoUrl || featuredImageCourses.length ? (
-              <View style={styles.heroCard}>
-                {introVideoUrl ? (
-                  introVideoIsDirectFile ? (
-                    <View style={styles.videoWrap}>
-                      <VideoView
-                        player={featuredVideoPlayer}
-                        style={styles.video}
-                        nativeControls
-                        contentFit="cover"
-                        allowsFullscreen
-                      />
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={styles.videoFallbackWrap}
-                      onPress={() =>
-                        introVideoCourse?.id ? openCourse(introVideoCourse.id) : undefined
-                      }
-                    >
-                      {introVideoCourse?.imageUrl ? (
+            {/* ✅ HERO SECTION WITH LOCAL VIDEO */}
+            <View style={styles.videoWrap}>
+              <VideoView
+                player={featuredVideoPlayer}
+                style={styles.video}
+                contentFit="cover"
+              />
+            </View>
+
+
+
+            <View style={styles.heroCard}>
+
+
+
+              {featuredImageCourses.length ? (
+                <View style={styles.featuredWrap}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.featuredScrollContent}
+                  >
+                    {featuredImageCourses.map((course) => (
+                      <Pressable
+                        key={course.id}
+                        style={({ pressed }) => [
+                          styles.featuredCard,
+                          pressed && styles.cardPressed,
+                        ]}
+                        onPress={() => openCourse(course.id)}
+                      >
                         <Image
-                          source={{ uri: introVideoCourse.imageUrl }}
-                          style={styles.videoFallbackImage}
+                          source={{ uri: course.imageUrl || "" }}
+                          style={styles.featuredImage}
                           resizeMode="cover"
                         />
-                      ) : (
-                        <View style={styles.videoFallbackPlaceholder} />
-                      )}
-                    </Pressable>
-                  )
-                ) : null}
-
-                {featuredImageCourses.length ? (
-                  <View style={styles.featuredWrap}>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.featuredScrollContent}
-                    >
-                      {featuredImageCourses.map((course) => (
-                        <Pressable
-                          key={course.id}
-                          style={({ pressed }) => [
-                            styles.featuredCard,
-                            pressed && styles.cardPressed,
-                          ]}
-                          onPress={() => openCourse(course.id)}
-                        >
-                          <Image
-                            source={{ uri: course.imageUrl || "" }}
-                            style={styles.featuredImage}
-                            resizeMode="cover"
-                          />
-                          <Text style={styles.featuredCourseName} numberOfLines={2}>
-                            {course.courseName || "Untitled Course"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
+                        <Text style={styles.featuredCourseName} numberOfLines={2}>
+                          {course.courseName || "Untitled Course"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </View>
           </View>
         }
         renderItem={({ item }) => {
@@ -261,6 +243,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
+  fullWidthVideo: {
+    marginHorizontal: -16,
+  },
+
   center: {
     flex: 1,
     backgroundColor: "#f5f7fb",
@@ -279,11 +265,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   subheading: {
-    marginTop: 8,
+    marginTop: -6,
     marginBottom: 18,
     fontSize: 15,
     lineHeight: 22,
     color: "#64748b",
+
   },
   listContent: {
     paddingBottom: 32,
@@ -297,29 +284,15 @@ const styles = StyleSheet.create({
   },
   videoWrap: {
     width: "100%",
-    height: 250,
-    overflow: "hidden",
-    backgroundColor: "#020617",
+    aspectRatio: 16 / 9,   // ✅ FIX: proper video proportion
+    backgroundColor: "#000",
+
+    marginBottom: 16
   },
   video: {
     width: "100%",
     height: "100%",
     backgroundColor: "#020617",
-  },
-  videoFallbackWrap: {
-    width: "100%",
-    height: 250,
-    overflow: "hidden",
-    backgroundColor: "#020617",
-  },
-  videoFallbackImage: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#111827",
-  },
-  videoFallbackPlaceholder: {
-    flex: 1,
-    backgroundColor: "#111827",
   },
   featuredWrap: {
     marginTop: 14,
