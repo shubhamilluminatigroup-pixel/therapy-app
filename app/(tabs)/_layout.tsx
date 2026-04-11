@@ -1,33 +1,72 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Tabs, useRouter } from "expo-router";
+import { useAuthUser } from "../../lib/useAuth";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+export default function TabsLayout() {
+  const router = useRouter();
+  const { user } = useAuthUser();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const requireLogin = (target: string) => (event: { preventDefault: () => void }) => {
+    if (user) return;
+    event.preventDefault();
+    router.push({
+      pathname: "/login",
+      params: { redirect: target },
+    });
+  };
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: "#16a34a" }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="my-course"
+        options={{
+          title: "My Course",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="play-circle-outline" size={size} color={color} />
+          ),
+        }}
+        listeners={{
+          tabPress: requireLogin("/(tabs)/my-course"),
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: "Account",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="person-outline" size={size} color={color} />
+          ),
+        }}
+        listeners={{
+          tabPress: requireLogin("/(tabs)/account"),
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Admin",
+          href: user?.isStaff ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="admin-panel-settings" size={size} color={color} />
+          ),
+        }}
+        listeners={{
+          tabPress: requireLogin("/(tabs)/admin"),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          href: null,
         }}
       />
     </Tabs>

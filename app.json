@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +24,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.shubham.illuminatigroup.therapyapp"
     },
     "web": {
       "output": "static",
@@ -38,11 +44,23 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a6b69d6d-dff5-44fc-915e-fe0e9af67d09"
+      }
     }
   }
 }

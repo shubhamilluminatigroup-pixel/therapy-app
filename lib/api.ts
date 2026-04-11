@@ -1,0 +1,395 @@
+import { getAuthToken, clearAuthSession, setAuthSession, getCurrentUser } from "./authStore";
+import { 
+  FeedbackImageItem, 
+  CourseItem, 
+  MyCourseItem, 
+  AppUser, 
+  HomeCategoryGroup, 
+  HomeTopMediaItem, 
+  Course, 
+  Session 
+} from "@/types/backend";
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${API_BASE_URL}${cleanPath}`;
+
+  const headers = new Headers(init?.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (!headers.has("Content-Type") && !(init?.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = "Request failed";
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMessage = errorJson.msg || errorJson.error || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+// --- AUTH FUNCTIONS ---
+
+export async function loginWithApi(identifier: string, password: string): Promise<AppUser> {
+  const formData = new FormData();
+  formData.append("identifier", identifier);
+  formData.append("password", password);
+
+  const response = await request<{ status: string; user: any; token?: string; msg?: string }>(
+    "/accounts/app_login/",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (response.status !== "success") {
+    throw new Error(response.msg || "Login failed");
+  }
+
+  const user: AppUser = {
+    uid: String(response.user.user_id),
+    email: response.user.email,
+    fullName: response.user.full_name,
+    phone: response.user.phone,
+    isStaff: response.user.is_staff,
+  };
+
+  await setAuthSession(user, response.token || "session-token");
+  return user;
+}
+
+export async function registerWithApi(params: any): Promise<AppUser> {
+  const formData = new FormData();
+  formData.append("full_name", params.fullName);
+  formData.append("email", params.email);
+  formData.append("phone", params.phone);
+  formData.append("password", params.password);
+  if (params.address) formData.append("address", params.address);
+
+  const response = await request<{ status: string; user: any; token?: string; msg?: string }>(
+    "/accounts/app_register/",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (response.status !== "success") {
+    throw new Error(response.msg || "Registration failed");
+  }
+
+  const user: AppUser = {
+    uid: String(response.user.user_id),
+    email: response.user.email,
+    fullName: response.user.full_name,
+    phone: response.user.phone,
+    isStaff: response.user.is_staff,
+  };
+
+  await setAuthSession(user, response.token || "session-token");
+  return user;
+}
+
+export async function logoutWithApi() {
+  await request("/accounts/app_logout/", { method: "POST" }).catch(() => {});
+  await clearAuthSession();
+}
+
+export async function getAccountOverview() {
+  const user = getCurrentUser();
+  const response = await request<{ status: string; user: any }>("/accounts/app_me/");
+  
+  const mappedUser: AppUser = {
+    uid: String(response.user.user_id),
+    email: response.user.email,
+    fullName: response.user.full_name,
+    phone: response.user.phone,
+    isStaff: response.user.is_staff,
+  };
+
+  const myCourses = await listMyCourses().catch(() => []);
+
+  return {
+    user: mappedUser,
+    myCourses,
+    purchases: [] // Purchases array is derived from myCourses in this setup
+  };
+}
+
+export async function changePasswordWithApi(current: string, next: string) {
+  const formData = new FormData();
+  formData.append("current_password", current);
+  formData.append("new_password", next);
+
+  return request<{ status: string; msg: string }>("/accounts/app_change_password/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// --- FORGOT PASSWORD ---
+
+export async function sendForgotPasswordOtpWithApi(phone: string) {
+  const formData = new FormData();
+  formData.append("phone", phone);
+  return request<{ status: string; msg: string }>("/accounts/app_forgot_password_send_otp/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function resetPasswordWithOtpApi(params: any) {
+  const formData = new FormData();
+  formData.append("phone", params.phone);
+  formData.append("otp", params.otp);
+  formData.append("new_password", params.newPassword);
+  
+  return request<{ status: string; msg: string }>("/accounts/app_forgot_password_reset/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// --- HOME & CATEGORY FUNCTIONS ---
+
+export async function listHomeCategories(): Promise<HomeCategoryGroup[]> {
+  const response = await request<{ categories: any[] }>("/courses/home_catalog/");
+  return (response.categories || []).map(cat => ({
+    id: String(cat.category_id),
+    name: cat.category_name,
+    courses: (cat.courses || []).map((c: any) => ({
+      id: String(c.id),
+      courseName: c.course_name,
+      imageUrl: c.image,
+    } as Course))
+  }));
+}
+
+export async function listHomeTopMedia(): Promise<HomeTopMediaItem[]> {
+  const response = await request<{ status: string; data: any[] }>("/app_home_top_media/");
+  return (response.data || []).map(item => ({
+    id: String(item.id),
+    url: item.url,
+    courseId: String(item.course_id),
+    courseName: item.course_name,
+    courseImageUrl: item.course_image,
+    sortOrder: item.sort_order,
+  }));
+}
+
+export async function listMyCourses(): Promise<MyCourseItem[]> {
+  const user = getCurrentUser();
+  if (!user?.uid) return [];
+  
+  const response = await request<{ my_course: any[] }>(`/courses/my_courses/?user_id=${user.uid}`);
+  return (response.my_course || []).map(c => ({
+    id: String(c.id),
+    courseName: c.name,
+    instructor: c.instructor,
+    description: c.description,
+    imageUrl: c.course_image,
+    demoVideoUrl: c.demo_video,
+    language: c.course_lang,
+  }));
+}
+
+export async function getCourse(id: string): Promise<Course> {
+  const response = await request<any>(`/courses/course_full_detail/?course_id=${id}`);
+  
+  if (response.error) {
+    throw new Error(response.error);
+  }
+
+  return {
+    id: String(response.id),
+    categoryId: String(response.category_id),
+    categoryName: response.category_name,
+    courseName: response.course_name,
+    instructor: response.instructor,
+    description: response.description,
+    imageUrl: response.image,
+    demoVideoUrl: response.demo_video,
+    language: response.language,
+    contentType: response.type,
+    validateFor: response.validate_for,
+    isPaid: true, // Backend logic expects manual price checking in details
+  };
+}
+
+export async function listCourseSessions(courseId: string): Promise<Session[]> {
+  const response = await request<{ course_details: any[] }>(`/courses/course_detail/?course_id=${courseId}`);
+  return (response.course_details || []).map((session, index) => ({
+    id: String(index),
+    courseId,
+    title: session.title,
+    mediaType: session.file_type === "Audio" ? "audio" : "video",
+    audioUrl: session.video,
+    duration: 600,
+    order: index,
+    isActive: true,
+  }));
+}
+
+export async function enrollInCourse(courseId: string) {
+  // Normally triggers if price gets 0 mapped, placeholder for backend trigger
+  const formData = new FormData();
+  formData.append("month", "1");
+  const user = getCurrentUser();
+  if (user) formData.append("user_id", user.uid);
+
+  return request("/app_buy_course_detail/" + courseId + "/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function updateSessionProgress(params: {
+  courseId: string;
+  sessionId: string;
+  position: number;
+  completed: boolean;
+}) {
+  return request("/app_update_session_progress/", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+// --- FEEDBACK FUNCTIONS ---
+
+export async function listFeedbackImages(): Promise<FeedbackImageItem[]> {
+  const response = await request<{ status: string; data: any[] }>("/app_get_feedback_images/");
+  return (response.data || []).map(img => ({
+    id: String(img.id),
+    title: img.title,
+    imageUrl: img.image_url,
+    createdAt: img.created_at,
+  }));
+}
+
+export async function uploadFeedbackImage(title: string, uri: string) {
+  const formData = new FormData();
+  formData.append("title", title);
+  if (uri) {
+    const filename = uri.split("/").pop() || "image.jpg";
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : "image/jpeg";
+    formData.append("image", ({ uri, name: filename, type } as any));
+  }
+  return request("/app_upload_feedback_image/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function deleteFeedbackImage(id: string) {
+  const formData = new FormData();
+  formData.append("id", id);
+  return request("/app_delete_feedback_image/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function editFeedbackImage(params: { id: string; title?: string; uri?: string }) {
+  const formData = new FormData();
+  formData.append("id", params.id);
+  if (params.title) formData.append("title", params.title);
+  if (params.uri) {
+    const filename = params.uri.split("/").pop() || "image.jpg";
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : "image/jpeg";
+    formData.append("image", ({ uri: params.uri, name: filename, type } as any));
+  }
+  return request("/app_edit_feedback_image/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// --- ADMIN & COURSE MASTER ---
+
+export async function listCourses(): Promise<CourseItem[]> {
+  const response = await request<{ status: string; data: any[] }>("/app_get_courses/");
+  return (response.data || []).map(c => ({
+    id: String(c.id),
+    name: c.name,
+    screen_order: c.screen_order,
+    rating: c.rating
+  }));
+}
+
+export async function updateCourseDetailsBulk(items: any[]) {
+  return request("/update_master_bulk/", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+}
+
+// --- CART & PAYMENT FUNCTIONS ---
+
+export async function listServiceMonths(courseId: string) {
+  const response = await request<{ status: string; data: any[] }>(`/app_get_service_month/?course_id=${courseId}`);
+  return response.data || [];
+}
+
+export async function getServicePrice(params: { courseId: string; monthId: string }) {
+  const user = getCurrentUser();
+  const url = `/app_get_service_price/?course_id=${params.courseId}&month_id=${params.monthId}${user?.uid ? `&user_id=${user.uid}` : ''}`;
+  const response = await request<{ status: string; data: any }>(url);
+  return response.data;
+}
+
+export async function applyCouponCode(params: { courseId: string; couponCode: string }) {
+  const user = getCurrentUser();
+  const url = `/app_apply_coupon_code/?course_id=${params.courseId}&coupon_code=${params.couponCode}${user?.uid ? `&user_id=${user.uid}` : ''}`;
+  const response = await request<{ status: string; coupon_data: any }>(url);
+  return response.coupon_data;
+}
+
+export async function initiateAppPayment(params: { courseId: string; month: number; couponCode: string }) {
+  const formData = new FormData();
+  formData.append("month", String(params.month));
+  if (params.couponCode) formData.append("coupon_code", params.couponCode);
+  
+  const user = getCurrentUser();
+  if (user) formData.append("user_id", user.uid);
+
+  return request<any>(`/app_buy_course_detail/${params.courseId}/`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function confirmAppPayment(merchantReferenceId: string) {
+  const formData = new FormData();
+  formData.append("merchant_reference_id", merchantReferenceId);
+  return request("/app_payment_confirm/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function getAppPaymentStatus(merchantReferenceId: string) {
+  return request<{ status: string; payment_state: string }>(
+    `/app_payment_status/?merchant_reference_id=${merchantReferenceId}`
+  );
+}
