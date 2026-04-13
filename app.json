@@ -2,6 +2,9 @@
   "expo": {
     "name": "MRC Therapy 2.0",
     "slug": "mrc-therapy-2",
+
+    "name": "MRC Therapy App",
+    "slug": "therapy-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
