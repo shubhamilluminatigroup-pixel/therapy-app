@@ -53,7 +53,8 @@
         {
           "supportsBackgroundPlayback": true
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
