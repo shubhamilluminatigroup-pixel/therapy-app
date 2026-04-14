@@ -25,6 +25,7 @@ export type Course = {
   imageUrl?: string | null;
   demoVideoUrl?: string | null;
   validateFor?: number | null;
+  rating?: number;
 };
 
 export type Session = {
@@ -101,5 +102,5 @@ export interface CourseItem {
   id: string;
   name: string;
   screen_order: number;
-  rating: number;
+
 }

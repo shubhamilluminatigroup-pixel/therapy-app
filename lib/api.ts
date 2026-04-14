@@ -1,14 +1,14 @@
-import { getAuthToken, clearAuthSession, setAuthSession, getCurrentUser } from "./authStore";
-import { 
-  FeedbackImageItem, 
-  CourseItem, 
-  MyCourseItem, 
-  AppUser, 
-  HomeCategoryGroup, 
-  HomeTopMediaItem, 
-  Course, 
-  Session 
+import {
+  AppUser,
+  Course,
+  CourseItem,
+  FeedbackImageItem,
+  HomeCategoryGroup,
+  HomeTopMediaItem,
+  MyCourseItem,
+  Session
 } from "@/types/backend";
+import { clearAuthSession, getAuthToken, getCurrentUser, setAuthSession } from "./authStore";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -171,7 +171,7 @@ export async function resetPasswordWithOtpApi(params: any) {
 // --- HOME & CATEGORY FUNCTIONS ---
 
 export async function listHomeCategories(): Promise<HomeCategoryGroup[]> {
-  const response = await request<{ categories: any[] }>("/courses/home_catalog/");
+  const response = await request<{ categories: any[] }>("/courses/home_catalog1/");
   return (response.categories || []).map(cat => ({
     id: String(cat.category_id),
     name: cat.category_name,
@@ -179,7 +179,9 @@ export async function listHomeCategories(): Promise<HomeCategoryGroup[]> {
       id: String(c.id),
       courseName: c.course_name,
       imageUrl: c.image,
-    } as Course))
+      rating: c.rating != null ? Number(c.rating) : undefined,
+      sortOrder: c.screen_order !== null && c.screen_order !== "" ? Number(c.screen_order) : undefined,
+    } as Course)).sort((a: Course, b: Course) => ((a.sortOrder ?? 999999) - (b.sortOrder ?? 999999)))
   }));
 }
 

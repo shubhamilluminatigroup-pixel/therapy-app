@@ -382,13 +382,68 @@ function fetch_my_courses(PDO $pdo, array $config, int $userId): array
     return $result;
 }
 
+function fetch_home_categories(PDO $pdo, array $config): array
+{
+    $stmt = $pdo->prepare("
+        SELECT
+            cm.id AS category_id,
+            cm.name AS category_name,
+            c.id,
+            c.name AS course_name,
+            c.course_image,
+            c.screen_order,
+            c.rating
+        FROM courses_coursemaster cm
+        LEFT JOIN courses_course c ON c.course_master_id = cm.id
+        ORDER BY cm.id, COALESCE(c.screen_order, 999999) ASC, c.id ASC
+    ");
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+
+    $categories = [];
+    foreach ($rows as $row) {
+        $catId = (string)$row['category_id'];
+        if (!isset($categories[$catId])) {
+            $categories[$catId] = [
+                'category_id' => $catId,
+                'category_name' => $row['category_name'],
+                'courses' => []
+            ];
+        }
+        if ($row['id']) {
+            $categories[$catId]['courses'][] = [
+                'id' => (string)$row['id'],
+                'course_name' => $row['course_name'],
+                'image' => media_url((string)$row['course_image'], $config),
+                'screen_order' => (int)$row['screen_order'],
+                'rating' => (float)$row['rating']
+            ];
+        }
+    }
+
+    return array_values($categories);
+}
+
 try {
     $pdo = pdo_conn($config);
-    $action = $_GET['action'] ?? '';
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    $base = '/hostinger-api/';
+    $action = '';
+    if (strpos($requestUri, $base) === 0) {
+        $path = substr($requestUri, strlen($base));
+        $action = trim($path, '/');
+    }
+    if ($action === '') {
+        $action = $_GET['action'] ?? '';
+    }
 
     switch ($action) {
         case 'courses':
             ok(fetch_courses($pdo, $config));
+            break;
+
+        case 'courses/home_catalog1':
+            ok(['categories' => fetch_home_categories($pdo, $config)]);
             break;
 
         case 'course':

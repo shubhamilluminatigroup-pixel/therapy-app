@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { listHomeCategories, listHomeTopMedia } from "../../lib/api";
-import { HomeCategoryGroup, HomeTopMediaItem } from "../../types/backend";
 
 // ✅ LOCAL VIDEO (place file in assets/videos/)
 const localIntroVideo = require("../../assets/images/intro.mp4");
@@ -21,8 +20,8 @@ const localIntroVideo = require("../../assets/images/intro.mp4");
 export default function HomeScreen() {
   const router = useRouter();
 
-  const [categories, setCategories] = useState<HomeCategoryGroup[]>([]);
-  const [topMedia, setTopMedia] = useState<HomeTopMediaItem[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [topMedia, setTopMedia] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
@@ -51,8 +50,18 @@ export default function HomeScreen() {
 
   const groupedCategories = useMemo(() => categories, [categories]);
 
+  const normalizeSortOrder = (value: number | string | undefined | null) => {
+    if (value === null || value === undefined || value === "") {
+      return 999999;
+    }
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 999999;
+  };
+
   const allCourses = useMemo(
-    () => categories.flatMap((category) => category.courses),
+    () => categories
+      .flatMap((category) => category.courses)
+      .sort((a, b) => normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder)),
     [categories]
   );
 
@@ -76,10 +85,6 @@ export default function HomeScreen() {
       setIsFinished(true);      // ✅ show replay button
     });
   });
-
-  const toggleCategory = (categoryId: string) => {
-    setExpandedCategory((prev) => (prev === categoryId ? null : categoryId));
-  };
 
   const openCourse = (courseId: string) => {
     router.push(`/course/${courseId}`);
@@ -143,11 +148,15 @@ export default function HomeScreen() {
                         ]}
                         onPress={() => openCourse(course.id)}
                       >
-                        <Image
-                          source={{ uri: course.imageUrl || "" }}
-                          style={styles.featuredImage}
-                          resizeMode="cover"
-                        />
+                        {course.imageUrl ? (
+                          <Image
+                            source={{ uri: course.imageUrl }}
+                            style={styles.featuredImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.featuredImage, styles.featuredImagePlaceholder]} />
+                        )}
                         <Text style={styles.featuredCourseName} numberOfLines={2}>
                           {course.courseName || "Untitled Course"}
                         </Text>
@@ -160,67 +169,44 @@ export default function HomeScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const expanded = expandedCategory === item.id;
-
+          const sortedCourses = [...item.courses].sort((a, b) => normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder));
           return (
-            <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => toggleCategory(item.id)}
-            >
-              <View style={styles.cardBody}>
-                <View style={styles.topRow}>
-                  <View style={styles.titleWrap}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardSubtitle}>
-                      {item.courses.length} course
-                      {item.courses.length > 1 ? "s" : ""} available
-                    </Text>
-                  </View>
-
-                  <View style={styles.countBadge}>
-                    <Text style={styles.countText}>{item.courses.length}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.actionRow}>
-                  <Text style={styles.expandHint}>
-                    {expanded ? "Hide courses" : "View courses"}
-                  </Text>
-                  <Text style={styles.arrow}>{expanded ? "-" : "+"}</Text>
-                </View>
-
-                {expanded ? (
-                  <View style={styles.expandedWrap}>
-                    {item.courses.map((course) => (
-                      <View key={course.id} style={styles.courseItem}>
-                        {course.imageUrl ? (
-                          <Image
-                            source={{ uri: course.imageUrl }}
-                            style={styles.courseImage}
-                            resizeMode="cover"
-                          />
-                        ) : null}
-
-                        <View style={styles.courseTopRow}>
-                          <View style={styles.courseTextWrap}>
-                            <Text style={styles.courseTitle}>
-                              {course.courseName || "Untitled Course"}
-                            </Text>
-                          </View>
+            <View style={styles.categoryCard}>
+              <Text style={styles.categoryTitle}>{item.name}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.coursesScrollContent}
+              >
+                {sortedCourses.map((course) => (
+                  <Pressable
+                    key={course.id}
+                    style={styles.courseCard}
+                    onPress={() => openCourse(course.id)}
+                  >
+                    <View style={styles.courseImageContainer}>
+                      {course.imageUrl ? (
+                        <Image
+                          source={{ uri: course.imageUrl }}
+                          style={styles.courseImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.courseImage, styles.courseImagePlaceholder]} />
+                      )}
+                      {course.rating ? (
+                        <View style={styles.ratingOverlay}>
+                          <Text style={styles.ratingText}>{'★'.repeat(Math.floor(course.rating || 0))}</Text>
                         </View>
-
-                        <Pressable
-                          style={styles.courseButton}
-                          onPress={() => openCourse(course.id)}
-                        >
-                          <Text style={styles.courseButtonText}>Open Course</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-              </View>
-            </Pressable>
+                      ) : null}
+                    </View>
+                    <Text style={styles.courseTitle} numberOfLines={2}>
+                      {course.courseName || "Untitled Course"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
           );
         }}
         ListEmptyComponent={
@@ -334,107 +320,67 @@ const styles = StyleSheet.create({
   cardPressed: {
     opacity: 0.94,
   },
-  cardBody: {
-    padding: 18,
+  categoryCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    marginBottom: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e7edf5",
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  titleWrap: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 22,
+  categoryTitle: {
+    fontSize: 18,
     fontWeight: "800",
     color: "#0f172a",
-    lineHeight: 30,
-  },
-  cardSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#64748b",
-    lineHeight: 20,
-  },
-  countBadge: {
-    minWidth: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#dcfce7",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
-  countText: {
-    color: "#15803d",
-    fontWeight: "800",
-    fontSize: 14,
-  },
-  actionRow: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  expandHint: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2563eb",
-  },
-  arrow: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#2563eb",
-    lineHeight: 22,
-  },
-  expandedWrap: {
-    marginTop: 16,
-  },
-  courseItem: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 20,
-    padding: 14,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e8eef5",
+  },
+  coursesScrollContent: {
+    paddingRight: 16,
+  },
+  courseCard: {
+    width: 120,
+    marginRight: 12,
+    alignItems: "center",
+  },
+  courseImageContainer: {
+    marginBottom: 8,
   },
   courseImage: {
-    width: "100%",
-    height: 148,
-    borderRadius: 16,
-    marginBottom: 12,
+    width: 100,
+    height: 100,
+    borderRadius: 12,
     backgroundColor: "#e5e7eb",
   },
-  courseTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+  courseImagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f4f8',
   },
-  courseTextWrap: {
-    flex: 1,
+  ratingOverlay: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  ratingText: {
+    color: '#ffd700',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   courseTitle: {
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#0f172a",
-    lineHeight: 24,
-  },
-  courseButton: {
-    marginTop: 10,
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  courseButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 16,
   },
   emptyWrap: {
     paddingVertical: 36,
