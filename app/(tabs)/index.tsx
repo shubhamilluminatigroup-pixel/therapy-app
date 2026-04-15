@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -237,6 +238,17 @@ export default function HomeScreen() {
             </Text>
           </View>
         }
+
+        ListFooterComponent={
+          <View style={styles.footerWrap}>
+            <Text style={styles.footerText}>MRC Ayurveda Research Center Lotus Garden Homes VIP, Sunrakh Rd, Vrindavan, Uttar Pradesh 281121</Text>
+            <Text style={styles.footerText}>Dr. Abhishek Sharma</Text>
+            <Text style={styles.footerText}>Reach out to us @ +91 7351154123</Text>
+            <Pressable onPress={() => Linking.openURL('https://www.youtube.com/@mrcayurveda3775')}>
+              <Text style={styles.footerLink}>Visit Our Channel</Text>
+            </Pressable>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -444,5 +456,22 @@ const styles = StyleSheet.create({
     color: "#64748b",
     textAlign: "center",
     lineHeight: 20,
+  },
+  footerWrap: {
+  padding: 16,
+  alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 8,
+    alignContent: 'center',
+    textAlign: 'center',
+  },
+  footerLink: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
