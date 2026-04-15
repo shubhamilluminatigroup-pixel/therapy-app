@@ -1,10 +1,12 @@
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +14,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { listHomeCategories, listHomeTopMedia } from "../../lib/api";
+import {
+  listFeedbackImages,
+  listHomeCategories,
+  listHomeTopMedia,
+} from "../../lib/api";
+import { FeedbackImageItem } from "../../types/backend";
 
 // ✅ LOCAL VIDEO (place file in assets/videos/)
 const localIntroVideo = require("../../assets/images/intro.mp4");
@@ -22,6 +29,10 @@ export default function HomeScreen() {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [topMedia, setTopMedia] = useState<any[]>([]);
+  const [feedbackImages, setFeedbackImages] = useState<FeedbackImageItem[]>([]);
+  const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
+  const [feedbackWidth, setFeedbackWidth] = useState(0);
+  const feedbackScrollRef = useRef<ScrollView | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
@@ -58,20 +69,40 @@ export default function HomeScreen() {
     return Number.isFinite(numberValue) ? numberValue : 999999;
   };
 
-  const allCourses = useMemo(
-    () => categories
-      .flatMap((category) => category.courses)
-      .sort((a, b) => normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder)),
-    [categories]
-  );
+  useEffect(() => {
+    const loadFeedback = async () => {
+      try {
+        const images = await listFeedbackImages();
+        setFeedbackImages(images);
+      } catch (error) {
+        console.log("Load feedback images error:", error);
+      }
+    };
 
-  const featuredImageCourses = useMemo(
-    () =>
-      allCourses
-        .filter((course) => course.imageUrl)
-        .slice(0, 5),
-    [allCourses]
-  );
+    void loadFeedback();
+  }, []);
+
+  useEffect(() => {
+    if (!feedbackImages.length || !feedbackWidth) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCurrentFeedbackIndex((current) => {
+        const nextIndex = (current + 1) % feedbackImages.length;
+        feedbackScrollRef.current?.scrollTo({
+          x: nextIndex * feedbackWidth,
+          y: 0,
+          animated: true,
+        });
+        return nextIndex;
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [feedbackImages, feedbackWidth]);
+
+  const currentFeedback = feedbackImages[currentFeedbackIndex];
 
   // ✅ VIDEO PLAYER USING LOCAL FILE
   const [isFinished, setIsFinished] = useState(false);
@@ -128,43 +159,32 @@ export default function HomeScreen() {
 
 
 
-            <View style={styles.heroCard}>
-
-
-
-              {featuredImageCourses.length ? (
-                <View style={styles.featuredWrap}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.featuredScrollContent}
-                  >
-                    {featuredImageCourses.map((course) => (
-                      <Pressable
-                        key={course.id}
-                        style={({ pressed }) => [
-                          styles.featuredCard,
-                          pressed && styles.cardPressed,
-                        ]}
-                        onPress={() => openCourse(course.id)}
-                      >
-                        {course.imageUrl ? (
-                          <Image
-                            source={{ uri: course.imageUrl }}
-                            style={styles.featuredImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.featuredImage, styles.featuredImagePlaceholder]} />
-                        )}
-                        <Text style={styles.featuredCourseName} numberOfLines={2}>
-                          {course.courseName || "Untitled Course"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
+            <View style={styles.heroPlane}>
+              <ScrollView
+                ref={feedbackScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                snapToAlignment="center"
+                onMomentumScrollEnd={({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+                  if (!feedbackWidth) {
+                    return;
+                  }
+                  const index = Math.round(nativeEvent.contentOffset.x / feedbackWidth);
+                  setCurrentFeedbackIndex(index);
+                }}
+                onLayout={({ nativeEvent }) => setFeedbackWidth(nativeEvent.layout.width)}
+              >
+                {feedbackImages.map((item) => (
+                  <View key={item.id} style={[styles.feedbackImageWrap, { width: feedbackWidth || "100%" }]}> 
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={styles.feedbackImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           </View>
         }
@@ -268,17 +288,44 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     overflow: "hidden",
   },
+  heroPlane: {
+    backgroundColor: "#020617",
+    borderRadius: 24,
+    overflow: "hidden",
+    marginBottom: 18,
+  },
   videoWrap: {
     width: "100%",
     aspectRatio: 16 / 9,   // ✅ FIX: proper video proportion
     backgroundColor: "#000",
-
-    marginBottom: 16
+    marginBottom: 12,
+    overflow: "hidden",
+    borderRadius: 18,
   },
   video: {
     width: "100%",
     height: "100%",
     backgroundColor: "#020617",
+    borderRadius: 18,
+  },
+  feedbackImageWrap: {
+    width: "100%",
+    backgroundColor: "transparent",
+    padding: 0,
+    alignItems: "center",
+  },
+  feedbackImage: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 18,
+    backgroundColor: "#334155",
+  },
+  feedbackImageTitle: {
+    marginTop: 12,
+    color: "#f8fafc",
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
   },
   featuredWrap: {
     marginTop: 14,
