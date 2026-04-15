@@ -108,7 +108,7 @@ export default function HomeScreen() {
   const [isFinished, setIsFinished] = useState(false);
 
   const featuredVideoPlayer = useVideoPlayer(localIntroVideo, (player) => {
-    player.loop = false;        // ❌ no loop
+    player.loop = true;        // ❌ no loop
     player.muted = false;       // 🔊 sound ON
     player.play();              // ▶️ autoplay
 
