@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CartCheckoutModal from "../../components/CartCheckoutModal";
@@ -161,11 +161,7 @@ export default function CourseDetailScreen() {
         </Pressable>
 
         <View style={styles.courseCard}>
-          {course.demoVideoUrl ? (
-            <View style={styles.mediaPlaceholder}>
-              <Text style={styles.mediaPlaceholderText}>Demo video available on website</Text>
-            </View>
-          ) : course.imageUrl ? (
+          {course.imageUrl ? (
             <Image
               source={{ uri: course.imageUrl }}
               style={styles.courseImage}
@@ -258,7 +254,7 @@ const styles = StyleSheet.create({
   },
   courseImage: {
     width: "100%",
-    height: 220,
+    aspectRatio: 1,
     backgroundColor: "#e5e7eb",
   },
   mediaPlaceholder: {
