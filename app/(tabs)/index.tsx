@@ -1,3 +1,4 @@
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,33 @@ import { FeedbackImageItem } from "../../types/backend";
 
 // ✅ LOCAL VIDEO (place file in assets/videos/)
 const localIntroVideo = require("../../assets/images/intro.mp4");
+const whatsappHelpUrl = "https://wa.me/917351154123";
+const socialLinks = [
+  {
+    color: "#1877f2",
+    icon: "facebook",
+    label: "Facebook",
+    url: "https://www.facebook.com/mrc.aarogyam",
+  },
+  {
+    color: "#e4405f",
+    icon: "instagram",
+    label: "Instagram",
+    url: "https://www.instagram.com/dr.abhishek__sharma/?igsh=MXNka3N5OXZqOTNnZQ%3D%3D",
+  },
+  {
+    color: "#ff0000",
+    icon: "youtube-play",
+    label: "YouTube",
+    url: "https://www.youtube.com/@mrcayurveda3775",
+  },
+  {
+    color: "#25d366",
+    icon: "whatsapp",
+    label: "WhatsApp",
+    url: whatsappHelpUrl,
+  },
+] as const;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -122,6 +150,14 @@ export default function HomeScreen() {
     router.push(`/course/${courseId}`);
   };
 
+  const openWhatsappHelp = () => {
+    void Linking.openURL(whatsappHelpUrl);
+  };
+
+  const openExternalUrl = (url: string) => {
+    void Linking.openURL(url);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center} edges={["top"]}>
@@ -144,10 +180,24 @@ export default function HomeScreen() {
         initialNumToRender={3}
         ListHeaderComponent={
           <View>
-            <Text style={styles.heading}>Explore Courses</Text>
-            <Text style={styles.subheading}>
-              Find the right therapy  for your journey
-            </Text>
+            <View style={styles.headerRow}>
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.heading}>Explore Courses</Text>
+                <Text style={styles.subheading}>
+                  Find the right therapy for your journey
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Open WhatsApp help chat"
+                accessibilityRole="button"
+                hitSlop={10}
+                onPress={openWhatsappHelp}
+                style={styles.whatsappButton}
+              >
+                <FontAwesome name="whatsapp" size={24} color="#ffffff" />
+              </Pressable>
+            </View>
+            
 
             {/* ✅ HERO SECTION WITH LOCAL VIDEO */}
             <View style={styles.videoWrap}>
@@ -243,10 +293,22 @@ export default function HomeScreen() {
           <View style={styles.footerWrap}>
             <Text style={styles.footerText}>MRC Ayurveda Research Center Lotus Garden Homes VIP, Sunrakh Rd, Vrindavan, Uttar Pradesh 281121</Text>
             <Text style={styles.footerText}>Dr. Abhishek Sharma</Text>
-            <Text style={styles.footerText}>Reach out to us @ +91 7351154123</Text>
-            <Pressable onPress={() => Linking.openURL('https://www.youtube.com/@mrcayurveda3775')}>
-              <Text style={styles.footerLink}>Visit Our Channel</Text>
+            <Pressable onPress={openWhatsappHelp}>
+              <Text style={[styles.footerText, styles.footerPhoneLink]}>Reach out to us @ +91 7351154123</Text>
             </Pressable>
+            <View style={styles.socialLinksRow}>
+              {socialLinks.map((item) => (
+                <Pressable
+                  key={item.label}
+                  accessibilityLabel={`Open ${item.label}`}
+                  accessibilityRole="link"
+                  onPress={() => openExternalUrl(item.url)}
+                  style={[styles.socialLinkButton, { backgroundColor: item.color }]}
+                >
+                  <FontAwesome name={item.icon} size={22} color="#ffffff" />
+                </Pressable>
+              ))}
+            </View>
           </View>
         }
       />
@@ -277,18 +339,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   heading: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: "800",
     color: "#0f172a",
     letterSpacing: -0.6,
   },
+  headerRow: {
+    minHeight: 52,
+    gap: 12,
+    marginBottom: 8,
+    position: "relative",
+    width: "100%",
+  },
+  headerTextWrap: {
+    paddingRight: 56,
+  },
+  whatsappButton: {
+    alignItems: "center",
+    backgroundColor: "#25d366",
+    borderRadius: 22,
+    height: 40,
+    justifyContent: "center",
+    position: "absolute",
+    right: 0,
+    top: 15,
+    width: 40,
+    marginRight: 16,
+  },
   subheading: {
-    marginTop: -6,
-    marginBottom: 18,
-    fontSize: 15,
+    marginTop: 1,
+    fontSize: 12,
     lineHeight: 22,
     color: "#64748b",
 
+  },
+  queryLinkWrap: {
+    alignSelf: "flex-start",
+    marginBottom: 18,
+  },
+  queryLink: {
+    color: "#16a34a",
+    fontSize: 14,
+    fontWeight: "800",
   },
   listContent: {
     paddingBottom: 32,
@@ -473,5 +565,24 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  footerPhoneLink: {
+    color: '#16a34a',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  socialLinksRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 14,
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  socialLinkButton: {
+    alignItems: "center",
+    borderRadius: 22,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
   },
 });

@@ -13,6 +13,7 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -42,6 +43,9 @@ app-example
 # generated native folders
 /ios
 /android
+
+# local Android signing config
+android/key.properties
 
 # temp files and backend repo copies
 temp/
