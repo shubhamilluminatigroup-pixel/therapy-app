@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   applyCouponCode,
+  enrollInCourse,
   getServicePrice,
   initiateAppPayment,
   listServiceMonths,
@@ -154,6 +155,14 @@ export default function CartCheckoutModal({
 
     try {
       setStartingPayment(true);
+
+      if (totalPrice <= 0) {
+        await enrollInCourse(course.id);
+        Alert.alert("Success", "Free course added to My Course.");
+        onClose();
+        router.push("/(tabs)/my-course");
+        return;
+      }
 
       const data = await initiateAppPayment({
         courseId: course.id,

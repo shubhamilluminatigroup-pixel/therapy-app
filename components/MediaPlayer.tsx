@@ -18,7 +18,7 @@ type MediaPlayerProps = {
   mediaType?: "audio" | "video";
   title: string;
   duration: number;
-  onProgressUpdate?: (position: number, completed: boolean) => void;
+  onProgressUpdate?: (position: number, completed: boolean, totalDuration?: number) => void;
   initialPosition?: number;
   isCompleted?: boolean;
 };
@@ -31,7 +31,7 @@ type LoadedMediaSurfaceProps = {
   initialPosition: number;
   isCompleted: boolean;
   downloaded: boolean;
-  onProgressUpdate?: (position: number, completed: boolean) => void;
+  onProgressUpdate?: (position: number, completed: boolean, totalDuration?: number) => void;
 };
 
 function buildPlayerSource(mediaUri: string) {
@@ -69,6 +69,7 @@ function LoadedMediaSurfaceComponent({
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasEnded, setHasEnded] = useState(isCompleted);
   const [pendingPlay, setPendingPlay] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const lastSavedRef = useRef(0);
@@ -104,6 +105,12 @@ function LoadedMediaSurfaceComponent({
   }, [onProgressUpdate]);
 
   useEffect(() => {
+    if (isCompleted) {
+      setHasEnded(true);
+    }
+  }, [isCompleted]);
+
+  useEffect(() => {
     const subscriptions = [
       player.addListener("timeUpdate", ({ currentTime }) => {
         setPosition(currentTime || 0);
@@ -129,18 +136,24 @@ function LoadedMediaSurfaceComponent({
         }
       }),
       player.addListener("sourceLoad", ({ duration: loadedDuration }) => {
-        setResolvedDuration(loadedDuration || duration || 0);
+        const nextDuration = loadedDuration || duration || 0;
+        setResolvedDuration(nextDuration);
         setIsLoaded(true);
         setLoadError(null);
+        if (nextDuration > 0) {
+          progressCallbackRef.current?.(latestPositionRef.current, isCompleted, nextDuration);
+        }
         if (initialPosition > 0) {
           player.currentTime = initialPosition;
         }
       }),
       player.addListener("playToEnd", () => {
         setIsPlaying(false);
+        setHasEnded(true);
         progressCallbackRef.current?.(
           latestDurationRef.current || duration || latestPositionRef.current,
-          true
+          true,
+          latestDurationRef.current || duration || latestPositionRef.current
         );
       }),
     ];
@@ -148,15 +161,15 @@ function LoadedMediaSurfaceComponent({
     return () => {
       subscriptions.forEach((subscription) => subscription.remove());
     };
-  }, [duration, initialPosition, player]);
+  }, [duration, initialPosition, isCompleted, player]);
 
   useEffect(() => {
     if (!onProgressUpdate || !uid) return;
     if (isPlaying && Math.abs(position - lastSavedRef.current) >= 10) {
       lastSavedRef.current = position;
-      onProgressUpdate(position, false);
+      onProgressUpdate(position, false, resolvedDuration);
     }
-  }, [isPlaying, onProgressUpdate, position, uid]);
+  }, [isPlaying, onProgressUpdate, position, resolvedDuration, uid]);
 
   const togglePlayback = () => {
     if (loadError) {
@@ -169,10 +182,19 @@ function LoadedMediaSurfaceComponent({
       return;
     }
 
+    if (hasEnded) {
+      player.currentTime = 0;
+      setPosition(0);
+      setHasEnded(false);
+      player.play();
+      return;
+    }
+
     if (isPlaying) {
       setPendingPlay(false);
       player.pause();
     } else {
+      setHasEnded(false);
       player.play();
     }
   };
@@ -180,6 +202,8 @@ function LoadedMediaSurfaceComponent({
   const handleSeek = (value: number) => {
     player.currentTime = value;
     setPosition(value);
+    setHasEnded(false);
+    onProgressUpdate?.(value, false, resolvedDuration);
   };
 
   return (
@@ -203,19 +227,14 @@ function LoadedMediaSurfaceComponent({
             {isCompleted ? <Text style={styles.completedBadge}>Completed</Text> : null}
           </View>
           <View style={styles.audioSurfaceWrap}>
-            <VideoView
-              player={player}
-              style={styles.audioSurface}
-              nativeControls={false}
-              contentFit="contain"
-            />
+            <Text style={styles.audioSurfaceText}>Audio session</Text>
           </View>
         </>
       )}
 
       <View style={styles.controls}>
         <TouchableOpacity style={styles.playButton} onPress={togglePlayback}>
-          <Text style={styles.playButtonText}>{isPlaying ? "Pause" : "Play"}</Text>
+          <Text style={styles.playButtonText}>{hasEnded ? "Replay" : isPlaying ? "Pause" : "Play"}</Text>
         </TouchableOpacity>
 
         <View style={styles.progressContainer}>
@@ -479,9 +498,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  audioSurface: {
-    width: "100%",
-    height: 52,
+  audioSurfaceText: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: "700",
   },
   controls: {
     alignItems: "center",

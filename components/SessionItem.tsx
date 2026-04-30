@@ -6,7 +6,7 @@ import MediaPlayer from "./MediaPlayer";
 type SessionItemProps = {
   session: Session;
   progress?: SessionProgress[string];
-  onProgressUpdate: (sessionId: string, position: number, completed: boolean) => void;
+  onProgressUpdate: (sessionId: string, position: number, completed: boolean, totalDuration?: number) => void;
 };
 
 function SessionItemComponent({
@@ -16,13 +16,14 @@ function SessionItemComponent({
 }: SessionItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleProgressUpdate = (position: number, completed: boolean) => {
-    onProgressUpdate(session.id, position, completed);
+  const handleProgressUpdate = (position: number, completed: boolean, totalDuration?: number) => {
+    onProgressUpdate(session.id, position, completed, totalDuration);
   };
 
+  const actualDuration = progress?.totalDuration || session.duration;
   const completionPercentage =
-    progress && session.duration > 0
-      ? Math.min((progress.lastPosition / session.duration) * 100, 100)
+    progress && actualDuration > 0
+      ? Math.min((progress.lastPosition / actualDuration) * 100, 100)
       : 0;
 
   return (
@@ -39,8 +40,8 @@ function SessionItemComponent({
             <Text style={styles.sessionTitle}>{session.title}</Text>
             <Text style={styles.sessionDuration}>
               {session.mediaType === "video" ? "Video session" : "Audio session"} ·{" "}
-              {Math.floor(session.duration / 60)}:
-              {(session.duration % 60).toString().padStart(2, "0")}
+              {Math.floor(actualDuration / 60)}:
+              {(Math.floor(actualDuration) % 60).toString().padStart(2, "0")}
             </Text>
           </View>
         </View>
@@ -69,7 +70,7 @@ function SessionItemComponent({
           ) : null}
 
           <MediaPlayer
-            sessionId={session.id}
+            sessionId={`${session.courseId}:${session.id}`}
             mediaUrl={session.audioUrl}
             mediaType={session.mediaType}
             title={session.title}

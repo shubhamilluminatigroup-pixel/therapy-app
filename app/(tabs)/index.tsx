@@ -1,7 +1,8 @@
+import { useFocusEffect } from "@react-navigation/native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -65,28 +66,35 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadCourses = async () => {
-      try {
-        const [categoryRows, topMediaRows] = await Promise.all([
-          listHomeCategories(),
-          listHomeTopMedia().catch((error) => {
-            console.log("Load top media error:", error);
-            return [];
-          }),
-        ]);
+  const loadHomeData = useCallback(async () => {
+    try {
+      const [categoryRows, topMediaRows, images] = await Promise.all([
+        listHomeCategories(),
+        listHomeTopMedia().catch((error) => {
+          console.log("Load top media error:", error);
+          return [];
+        }),
+        listFeedbackImages().catch((error) => {
+          console.log("Load feedback images error:", error);
+          return [];
+        }),
+      ]);
 
-        setCategories(categoryRows);
-        setTopMedia(topMediaRows);
-      } catch (error) {
-        console.log("Load courses error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void loadCourses();
+      setCategories(categoryRows);
+      setTopMedia(topMediaRows);
+      setFeedbackImages(images);
+    } catch (error) {
+      console.log("Load courses error:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadHomeData();
+    }, [loadHomeData])
+  );
 
   const groupedCategories = useMemo(() => categories, [categories]);
 
@@ -97,19 +105,6 @@ export default function HomeScreen() {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : 999999;
   };
-
-  useEffect(() => {
-    const loadFeedback = async () => {
-      try {
-        const images = await listFeedbackImages();
-        setFeedbackImages(images);
-      } catch (error) {
-        console.log("Load feedback images error:", error);
-      }
-    };
-
-    void loadFeedback();
-  }, []);
 
   useEffect(() => {
     if (!feedbackImages.length || !feedbackWidth) {
@@ -265,8 +260,13 @@ export default function HomeScreen() {
                       ) : (
                         <View style={[styles.courseImage, styles.courseImagePlaceholder]} />
                       )}
-                      {course.rating ? (
+                      {Number(course.rating) > 0 ? (
                         <View style={styles.ratingOverlay}>
+                          <View style={styles.ratingStarsRow}>
+                            {Array.from({ length: Math.min(Math.round(Number(course.rating) || 0), 5) }).map((_, index) => (
+                              <FontAwesome key={index} name="star" size={9} color="#ffd700" />
+                            ))}
+                          </View>
                           <Text style={styles.ratingText}>{'★'.repeat(Math.floor(course.rating || 0))}</Text>
                         </View>
                       ) : null}
@@ -523,8 +523,14 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     color: '#ffd700',
+    display: "none",
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  ratingStarsRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 1,
   },
   courseTitle: {
     fontSize: 12,

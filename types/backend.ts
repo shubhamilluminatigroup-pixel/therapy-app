@@ -102,5 +102,6 @@ export interface CourseItem {
   id: string;
   name: string;
   screen_order: number;
+  rating?: number;
 
 }

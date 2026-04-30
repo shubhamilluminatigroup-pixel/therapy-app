@@ -16,6 +16,8 @@ import SessionList from "../../components/SessionList";
 import {
   enrollInCourse,
   getCourse,
+  getServicePrice,
+  listServiceMonths,
   listMyCourses,
   updateSessionProgress,
 } from "../../lib/api";
@@ -117,6 +119,20 @@ export default function CourseDetailScreen() {
       setEnrolling(true);
 
       if (course.isPaid) {
+        const months = await listServiceMonths(course.id).catch(() => []);
+        const firstMonth = months[0];
+        const priceData = firstMonth
+          ? await getServicePrice({ courseId: course.id, monthId: firstMonth.id }).catch(() => null)
+          : null;
+        const resolvedPrice = Number(priceData?.price ?? firstMonth?.price ?? course.price ?? 0);
+
+        if (Number.isFinite(resolvedPrice) && resolvedPrice <= 0) {
+          await enrollInCourse(course.id);
+          await checkEnrollmentStatus();
+          Alert.alert("Success", "Free course added to My Course.");
+          return;
+        }
+
         setShowCartModal(true);
         return;
       }

@@ -9,8 +9,37 @@ import {
   Session
 } from "@/types/backend";
 import { clearAuthSession, getAuthToken, getCurrentUser, setAuthSession } from "./authStore";
+import { loadCachedOrFetch } from "./offlineCache";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const DAILY_CACHE_MS = 24 * 60 * 60 * 1000;
+
+function normalizeMediaType(fileType: unknown, mediaUrl?: string): "audio" | "video" {
+  const value = String(fileType || "").toLowerCase();
+  const cleanUrl = String(mediaUrl || "").toLowerCase().split("?")[0] ?? "";
+
+  if (
+    value.includes("audio") ||
+    /\.(mp3|m4a|aac|wav|ogg|oga|flac)$/.test(cleanUrl)
+  ) {
+    return "audio";
+  }
+
+  return "video";
+}
+
+function toNumberOrUndefined(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function isFreeValue(value: unknown) {
+  return String(value || "").trim().toLowerCase() === "free";
+}
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
@@ -43,6 +72,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+function withCacheBuster(path: string, enabled: boolean) {
+  if (!enabled) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}_=${Date.now()}`;
 }
 
 // --- AUTH FUNCTIONS ---
@@ -170,84 +205,129 @@ export async function resetPasswordWithOtpApi(params: any) {
 
 // --- HOME & CATEGORY FUNCTIONS ---
 
-export async function listHomeCategories(): Promise<HomeCategoryGroup[]> {
-  const response = await request<{ categories: any[] }>("/courses/home_catalog1/");
-  return (response.categories || []).map(cat => ({
-    id: String(cat.category_id),
-    name: cat.category_name,
-    courses: (cat.courses || []).map((c: any) => ({
-      id: String(c.id),
-      courseName: c.course_name,
-      imageUrl: c.image,
-      rating: c.rating != null ? Number(c.rating) : undefined,
-      sortOrder: c.screen_order !== null && c.screen_order !== "" ? Number(c.screen_order) : undefined,
-    } as Course)).sort((a: Course, b: Course) => ((a.sortOrder ?? 999999) - (b.sortOrder ?? 999999)))
-  }));
+export async function listHomeCategories(forceRefresh = false): Promise<HomeCategoryGroup[]> {
+  return loadCachedOrFetch("home-categories", async () => {
+    const response = await request<{ categories?: any[]; data?: { categories?: any[] } }>("/courses/home_catalog1/");
+    const categories = response.categories || response.data?.categories || [];
+    return categories.map(cat => ({
+      id: String(cat.category_id),
+      name: cat.category_name,
+      courses: (cat.courses || []).map((c: any) => ({
+        id: String(c.id),
+        courseName: c.course_name,
+        imageUrl: c.image,
+        rating: c.rating != null ? Number(c.rating) : undefined,
+        sortOrder: c.screen_order !== null && c.screen_order !== "" ? Number(c.screen_order) : undefined,
+      } as Course)).sort((a: Course, b: Course) => ((a.sortOrder ?? 999999) - (b.sortOrder ?? 999999)))
+    }));
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
-export async function listHomeTopMedia(): Promise<HomeTopMediaItem[]> {
-  const response = await request<{ status: string; data: any[] }>("/app_home_top_media/");
-  return (response.data || []).map(item => ({
-    id: String(item.id),
-    url: item.url,
-    courseId: String(item.course_id),
-    courseName: item.course_name,
-    courseImageUrl: item.course_image,
-    sortOrder: item.sort_order,
-  }));
+export async function listHomeTopMedia(forceRefresh = false): Promise<HomeTopMediaItem[]> {
+  return loadCachedOrFetch("home-top-media", async () => {
+    const response = await request<{ status: string; data: any[] }>("/app_home_top_media/");
+    return (response.data || []).map(item => ({
+      id: String(item.id),
+      url: item.url,
+      courseId: String(item.course_id),
+      courseName: item.course_name,
+      courseImageUrl: item.course_image,
+      sortOrder: item.sort_order,
+    }));
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
-export async function listMyCourses(): Promise<MyCourseItem[]> {
+export async function listMyCourses(forceRefresh = false): Promise<MyCourseItem[]> {
   const user = getCurrentUser();
   if (!user?.uid) return [];
-  
-  const response = await request<{ my_course: any[] }>(`/courses/my_courses/?user_id=${user.uid}`);
-  return (response.my_course || []).map(c => ({
-    id: String(c.id),
-    courseName: c.name,
-    instructor: c.instructor,
-    description: c.description,
-    imageUrl: c.course_image,
-    demoVideoUrl: c.demo_video,
-    language: c.course_lang,
-  }));
+
+  return loadCachedOrFetch(`my-courses:${user.uid}`, async () => {
+    const response = await request<{ my_course: any[] }>(`/courses/my_courses/?user_id=${user.uid}`);
+    return (response.my_course || []).map(c => ({
+      id: String(c.id ?? c.course_id),
+      categoryId: c.category_id != null ? String(c.category_id) : undefined,
+      categoryName: c.category_name ?? c.categoryName,
+      courseName: c.name ?? c.course_name ?? c.courseName,
+      subCourseName: c.sub_course_name ?? c.subCourseName,
+      instructor: c.instructor,
+      description: c.description,
+      imageUrl: c.course_image ?? c.image ?? c.imageUrl,
+      demoVideoUrl: c.demo_video ?? c.demoVideoUrl,
+      language: c.course_lang ?? c.language,
+      contentType: c.type ?? c.contentType,
+      paymentStatus: c.payment_status ?? c.paymentStatus,
+      totalSessions: c.total_sessions != null ? Number(c.total_sessions) : c.totalSessions != null ? Number(c.totalSessions) : undefined,
+      completedSessions: c.completed_sessions != null ? Number(c.completed_sessions) : c.completedSessions != null ? Number(c.completedSessions) : undefined,
+      sessionProgress: c.session_progress ?? c.sessionProgress,
+      enrolledAt: c.enrolled_at ?? c.enrolledAt ?? c.start_date,
+    }));
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
-export async function getCourse(id: string): Promise<Course> {
-  const response = await request<any>(`/courses/course_full_detail/?course_id=${id}`);
-  
-  if (response.error) {
-    throw new Error(response.error);
-  }
+export async function getCourse(id: string, forceRefresh = false): Promise<Course> {
+  return loadCachedOrFetch(`course:${id}`, async () => {
+    const response = await request<any>(`/courses/course_full_detail/?course_id=${id}`);
 
-  return {
-    id: String(response.id),
-    categoryId: String(response.category_id),
-    categoryName: response.category_name,
-    courseName: response.course_name,
-    instructor: response.instructor,
-    description: response.description,
-    imageUrl: response.image,
-    demoVideoUrl: response.demo_video,
-    language: response.language,
-    contentType: response.type,
-    validateFor: response.validate_for,
-    isPaid: true, // Backend logic expects manual price checking in details
-  };
+    if (response.error) {
+      throw new Error(response.error);
+    }
+
+    const price = toNumberOrUndefined(
+      response.price ?? response.money ?? response.amount ?? response.course_price ?? response.service_price
+    );
+    const freeText =
+      isFreeValue(response.price) ||
+      isFreeValue(response.money) ||
+      isFreeValue(response.amount) ||
+      isFreeValue(response.course_price) ||
+      isFreeValue(response.payment_status) ||
+      isFreeValue(response.paymentStatus);
+    const explicitPaid =
+      response.is_paid ?? response.isPaid ?? response.paid ?? response.is_course_paid;
+
+    return {
+      id: String(response.id),
+      categoryId: String(response.category_id),
+      categoryName: response.category_name,
+      courseName: response.course_name,
+      instructor: response.instructor,
+      description: response.description,
+      imageUrl: response.image,
+      demoVideoUrl: response.demo_video,
+      language: response.language,
+      contentType: response.type,
+      validateFor: response.validate_for,
+      price,
+      priceMonth: toNumberOrUndefined(response.price_month ?? response.month),
+      isPaid:
+        typeof explicitPaid === "boolean"
+          ? explicitPaid
+          : freeText
+            ? false
+            : price !== undefined
+              ? price > 0
+              : true,
+    };
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
-export async function listCourseSessions(courseId: string): Promise<Session[]> {
-  const response = await request<{ course_details: any[] }>(`/courses/course_detail/?course_id=${courseId}`);
-  return (response.course_details || []).map((session, index) => ({
-    id: String(index),
-    courseId,
-    title: session.title,
-    mediaType: session.file_type === "Audio" ? "audio" : "video",
-    audioUrl: session.video,
-    duration: 600,
-    order: index,
-    isActive: true,
-  }));
+export async function listCourseSessions(courseId: string, forceRefresh = false): Promise<Session[]> {
+  return loadCachedOrFetch(`course-sessions:${courseId}`, async () => {
+    const response = await request<{ course_details: any[] }>(`/courses/course_detail/?course_id=${courseId}`);
+    return (response.course_details || []).map((session, index) => {
+      const mediaUrl = session.video ?? session.audio ?? session.file ?? session.url ?? "";
+      return {
+        id: String(session.id ?? session.video_id ?? session.videofile_id ?? index + 1),
+        courseId,
+        title: session.title,
+        mediaType: normalizeMediaType(session.file_type ?? session.type ?? session.media_type, mediaUrl),
+        audioUrl: mediaUrl,
+        duration: Number(session.duration ?? session.video_duration ?? 600) || 600,
+        order: Number(session.screen_order ?? session.order ?? index + 1),
+        isActive: session.is_active !== false,
+      };
+    });
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
 export async function enrollInCourse(courseId: string) {
@@ -277,14 +357,25 @@ export async function updateSessionProgress(params: {
 
 // --- FEEDBACK FUNCTIONS ---
 
-export async function listFeedbackImages(): Promise<FeedbackImageItem[]> {
-  const response = await request<{ status: string; data: any[] }>("/app_get_feedback_images/");
-  return (response.data || []).map(img => ({
-    id: String(img.id),
-    title: img.title,
-    imageUrl: img.image_url,
-    createdAt: img.created_at,
-  }));
+export async function listFeedbackImages(forceRefresh = false): Promise<FeedbackImageItem[]> {
+  return loadCachedOrFetch("feedback-images", async () => {
+    const response = await request<{
+      status?: string;
+      data?: any[] | { data?: any[]; images?: any[] };
+      feedback_images?: any[];
+      images?: any[];
+    }>(withCacheBuster("/app_get_feedback_images/", forceRefresh));
+    const data = Array.isArray(response.data)
+      ? response.data
+      : response.data?.data || response.data?.images || response.feedback_images || response.images || [];
+
+    return data.map(img => ({
+      id: String(img.id),
+      title: img.title,
+      imageUrl: img.image_url || img.imageUrl || img.image,
+      createdAt: img.created_at || img.createdAt || "",
+    }));
+  }, DAILY_CACHE_MS, forceRefresh);
 }
 
 export async function uploadFeedbackImage(title: string, uri: string) {
@@ -330,27 +421,42 @@ export async function editFeedbackImage(params: { id: string; title?: string; ur
 // --- ADMIN & COURSE MASTER ---
 
 export async function listCourses(): Promise<CourseItem[]> {
-  const response = await request<{ status: string; data: any[] }>("/app_get_courses/");
-  return (response.data || []).map(c => ({
+  const response = await request<{ status?: string; data?: any[]; course_list?: any[]; courses?: any[] }>("/app_get_courses/");
+  const rows = response.data || response.course_list || response.courses || [];
+  return rows.map(c => ({
     id: String(c.id),
     name: c.name,
-    screen_order: c.screen_order,
-    rating: c.rating
+    screen_order: Number(c.screen_order ?? 0),
+    rating: Number(c.rating ?? 0)
   }));
 }
 
 export async function updateCourseDetailsBulk(items: any[]) {
-  return request("/update_master_bulk/", {
+  const normalizedItems = items.map((item) => ({
+    id: String(item.id),
+    screen_order: Number.isFinite(Number(item.screen_order)) ? Number(item.screen_order) : 0,
+    rating: Number.isFinite(Number(item.rating)) ? Number(item.rating) : 0,
+  }));
+
+  const result = await request("/update_master_bulk/", {
     method: "POST",
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items: normalizedItems, courses: normalizedItems }),
   });
+
+  await listHomeCategories(true).catch(() => []);
+  return result;
 }
 
 // --- CART & PAYMENT FUNCTIONS ---
 
 export async function listServiceMonths(courseId: string) {
   const response = await request<{ status: string; data: any[] }>(`/app_get_service_month/?course_id=${courseId}`);
-  return response.data || [];
+  return (response.data || []).map((item) => ({
+    ...item,
+    id: String(item.id),
+    month: Number(item.month ?? item.months ?? 1) || 1,
+    price: Number(item.price ?? item.money ?? item.amount ?? 0) || 0,
+  }));
 }
 
 export async function getServicePrice(params: { courseId: string; monthId: string }) {

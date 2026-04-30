@@ -49,7 +49,7 @@ async function writeCacheIndex(index: CacheIndex) {
 
 export async function getCachedMediaUri(sessionId: string) {
   const index = await readCacheIndex();
-  const uri = index[sessionId];
+  const uri = index[sessionId] || index[sessionId.split(":").pop() || ""];
   if (!uri) return null;
 
   const info = await FileSystem.getInfoAsync(uri);

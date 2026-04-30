@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { listCourseSessions } from "../lib/api";
+import { getCourseProgress, saveSessionProgress } from "../lib/progressStore";
+import { useAuthUid } from "../lib/useAuth";
 import { Session, SessionProgress } from "../types/sessions";
 import SessionItem from "./SessionItem";
 
 type SessionListProps = {
   courseId: string;
   enrollmentId?: string;
-  onProgressUpdate?: (sessionId: string, position: number, completed: boolean) => void;
+  onProgressUpdate?: (sessionId: string, position: number, completed: boolean, totalDuration?: number) => void;
 };
 
 export default function SessionList({
@@ -15,6 +17,7 @@ export default function SessionList({
   enrollmentId,
   onProgressUpdate,
 }: SessionListProps) {
+  const uid = useAuthUid();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionProgress, setSessionProgress] = useState<SessionProgress>({});
   const [loading, setLoading] = useState(true);
@@ -24,10 +27,10 @@ export default function SessionList({
   }, [courseId]);
 
   useEffect(() => {
-    if (enrollmentId) {
+    if (courseId) {
       void loadSessionProgress();
     }
-  }, [enrollmentId]);
+  }, [courseId, enrollmentId, uid]);
 
   const loadSessions = async () => {
     try {
@@ -45,22 +48,40 @@ export default function SessionList({
   };
 
   const loadSessionProgress = async () => {
-    setSessionProgress({});
+    const storedProgress = await getCourseProgress(courseId, uid);
+    setSessionProgress(storedProgress);
   };
 
-  const handleProgressUpdate = (sessionId: string, position: number, completed: boolean) => {
-    setSessionProgress((prev) => ({
-      ...prev,
-      [sessionId]: {
+  const handleProgressUpdate = (sessionId: string, position: number, completed: boolean, loadedDuration?: number) => {
+    const sessionDuration = sessions.find((s) => s.id === sessionId)?.duration || 0;
+    const totalDuration = loadedDuration || sessionDuration;
+    setSessionProgress((prev) => {
+      const previous = prev[sessionId];
+      return {
+        ...prev,
+        [sessionId]: {
+          completed: previous?.completed || completed,
+          lastPosition: position,
+          completedAt: previous?.completedAt || (completed ? new Date().toISOString() : undefined),
+          totalDuration,
+        },
+      };
+    });
+
+    void saveSessionProgress(
+      courseId,
+      sessionId,
+      {
         completed,
         lastPosition: position,
         completedAt: completed ? new Date().toISOString() : undefined,
-        totalDuration: sessions.find((s) => s.id === sessionId)?.duration || 0,
+        totalDuration,
       },
-    }));
+      uid
+    );
 
     if (onProgressUpdate) {
-      onProgressUpdate(sessionId, position, completed);
+      onProgressUpdate(sessionId, position, completed, totalDuration);
     }
   };
 

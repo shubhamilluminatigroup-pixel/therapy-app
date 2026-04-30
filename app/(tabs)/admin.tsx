@@ -4,6 +4,7 @@ import {
   deleteFeedbackImage,
   editFeedbackImage,
   listCourses,
+  listHomeCategories,
   updateCourseDetailsBulk,
 } from "@/lib/api";
 import { useAuthUser } from "@/lib/useAuth";
@@ -58,13 +59,16 @@ export default function AdminScreen() {
     }
   }, [authLoading, router, user?.uid, activeTab]);
 
-  const loadFeedbackData = async () => {
+  const loadFeedbackData = async (forceRefresh = false) => {
     try {
       setFeedbackLoading(true);
-      const data = await listFeedbackImages();
+      const data = await listFeedbackImages(forceRefresh);
       setFeedbackRows(data);
     } catch (error: any) {
       console.log("Load feedback data error:", error);
+      if (forceRefresh) {
+        Alert.alert("Refresh failed", error?.message || "Unable to refresh feedback list from server.");
+      }
     } finally {
       setFeedbackLoading(false);
     }
@@ -126,7 +130,7 @@ export default function AdminScreen() {
 
       Alert.alert("Success", "Feedback image saved.");
       resetFeedbackForm();
-      await loadFeedbackData();
+      await loadFeedbackData(true);
     } catch (error: any) {
       Alert.alert("Error", error?.message || "Failed to save feedback image.");
     } finally {
@@ -139,11 +143,12 @@ export default function AdminScreen() {
       setCourseSaving(true);
       await updateCourseDetailsBulk(courseRows.map(c => ({
         id: c.id,
-        screen_order: c.screen_order,
-        rating: c.rating
+        screen_order: Number.isFinite(Number(c.screen_order)) ? Number(c.screen_order) : 0,
+        rating: Number.isFinite(Number(c.rating)) ? Number(c.rating) : 0,
       })));
 
       Alert.alert("Success", "All course changes saved.");
+      await listHomeCategories(true).catch(() => []);
       await loadCourseData();
     } catch (error: any) {
       Alert.alert("Error", error?.message || "Failed to update.");
@@ -161,7 +166,7 @@ export default function AdminScreen() {
         onPress: async () => {
           try {
             await deleteFeedbackImage(id);
-            await loadFeedbackData();
+            await loadFeedbackData(true);
           } catch (error: any) {
             Alert.alert("Error", error?.message || "Failed to delete.");
           }
@@ -226,8 +231,10 @@ export default function AdminScreen() {
             <View style={styles.card}>
               <View style={styles.listHeader}>
                 <Text style={styles.sectionTitle}>Feedback List</Text>
-                <Pressable onPress={() => void loadFeedbackData()}>
-                  <Text style={styles.refreshText}>Refresh</Text>
+                <Pressable disabled={feedbackLoading} onPress={() => void loadFeedbackData(true)}>
+                  <Text style={[styles.refreshText, feedbackLoading && styles.refreshTextDisabled]}>
+                    {feedbackLoading ? "Refreshing..." : "Refresh"}
+                  </Text>
                 </Pressable>
               </View>
               {feedbackRows.map((item) => (
@@ -277,7 +284,10 @@ export default function AdminScreen() {
                       value={String(item.screen_order)}
                       onChangeText={(val) => {
                         const newRows = [...courseRows];
-                        newRows[index].screen_order = parseInt(val || "0");
+                        newRows[index] = {
+                          ...newRows[index],
+                          screen_order: Number.isFinite(parseInt(val || "0", 10)) ? parseInt(val || "0", 10) : 0,
+                        };
                         setCourseRows(newRows);
                       }}
                     />
@@ -287,7 +297,11 @@ export default function AdminScreen() {
                       value={String(item.rating)}
                       onChangeText={(val) => {
                         const newRows = [...courseRows];
-                        newRows[index].rating = parseFloat(val || "0");
+                        const nextRating = Math.max(0, Math.min(5, parseFloat(val || "0") || 0));
+                        newRows[index] = {
+                          ...newRows[index],
+                          rating: nextRating,
+                        };
                         setCourseRows(newRows);
                       }}
                     />
@@ -327,6 +341,7 @@ const styles = StyleSheet.create({
   helperText: { color: "#64748b", fontSize: 14, textAlign: "center" },
   listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   refreshText: { color: "#2563eb", fontWeight: "700", fontSize: 14 },
+  refreshTextDisabled: { color: "#94a3b8" },
   rowCard: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 16, padding: 14, marginTop: 12, backgroundColor: "#f8fafc" },
   rowTitle: { fontSize: 16, fontWeight: "800", color: "#0f172a", marginBottom: 6 },
   rowMeta: { fontSize: 13, color: "#475569", marginBottom: 4 },
