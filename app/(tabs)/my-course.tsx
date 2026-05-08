@@ -1,11 +1,11 @@
 import { useFocusEffect } from "@react-navigation/native";
+import { Image as ExpoImage } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -138,23 +138,25 @@ export default function MyCourseScreen() {
     }, [loadMyCourses])
   );
 
-  const openCourse = (courseId: string) => {
+  const openCourse = useCallback((courseId: string) => {
     router.push(`/course/${courseId}`);
-  };
+  }, [router]);
 
   const handleManualRefresh = () => {
     void loadMyCourses(true);
   };
 
-  const renderCourseCard = ({ item }: { item: MyCourseWithProgress }) => {
+  const renderCourseCard = useCallback(({ item }: { item: MyCourseWithProgress }) => {
     return (
       <View style={styles.card}>
         <View style={styles.courseRow}>
           {item.imageUrl ? (
-            <Image
+            <ExpoImage
               source={{ uri: item.imageUrl }}
               style={styles.courseImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={120}
             />
           ) : (
             <View style={[styles.courseImage, styles.imagePlaceholder]}>
@@ -203,7 +205,7 @@ export default function MyCourseScreen() {
         </Pressable>
       </View>
     );
-  };
+  }, [openCourse]);
 
   if (authLoading || loading) {
     return (
@@ -263,6 +265,11 @@ export default function MyCourseScreen() {
         refreshing={refreshing}
         onRefresh={handleManualRefresh}
         renderItem={renderCourseCard}
+        removeClippedSubviews
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyTitle}>No courses enrolled yet</Text>

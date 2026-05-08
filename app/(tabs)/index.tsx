@@ -1,17 +1,17 @@
-import { useFocusEffect } from "@react-navigation/native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useFocusEffect } from "@react-navigation/native";
+import { Image as ExpoImage } from "expo-image";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
-  Image,
   Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -20,7 +20,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   listFeedbackImages,
   listHomeCategories,
-  listHomeTopMedia,
 } from "../../lib/api";
 import { FeedbackImageItem } from "../../types/backend";
 
@@ -32,7 +31,7 @@ const socialLinks = [
     color: "#1877f2",
     icon: "facebook",
     label: "Facebook",
-    url: "https://www.facebook.com/mrc.aarogyam",
+    url: "https://www.facebook.com/share/19o7vFtbSP/",
   },
   {
     color: "#e4405f",
@@ -44,7 +43,13 @@ const socialLinks = [
     color: "#ff0000",
     icon: "youtube-play",
     label: "YouTube",
-    url: "https://www.youtube.com/@mrcayurveda3775",
+    url: "https://youtube.com/@drabhisheksharmamrc?si=Ypqmk2IT8k1cubJW",
+  },
+  {
+    color: "#ff0000",
+    icon: "youtube-play",
+    label: "YouTube.",
+    url: "https://youtube.com/@mrcmantratherapy?si=fzoH0OufctQzy2O8",
   },
   {
     color: "#25d366",
@@ -54,26 +59,113 @@ const socialLinks = [
   },
 ] as const;
 
+const normalizeSortOrder = (value: number | string | undefined | null) => {
+  if (value === null || value === undefined || value === "") {
+    return 999999;
+  }
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 999999;
+};
+
+type CourseRailProps = {
+  category: any;
+  onOpenCourse: (courseId: string) => void;
+};
+
+const CourseCard = memo(function CourseCard({
+  course,
+  onOpenCourse,
+}: {
+  course: any;
+  onOpenCourse: (courseId: string) => void;
+}) {
+  const rating = Math.min(Math.round(Number(course.rating) || 0), 5);
+
+  return (
+    <Pressable
+      style={styles.courseCard}
+      onPress={() => onOpenCourse(course.id)}
+    >
+      <View style={styles.courseImageContainer}>
+        {course.imageUrl ? (
+          <ExpoImage
+            source={{ uri: course.imageUrl }}
+            style={styles.courseImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={120}
+          />
+        ) : (
+          <View style={[styles.courseImage, styles.courseImagePlaceholder]} />
+        )}
+        {rating > 0 ? (
+          <View style={styles.ratingOverlay}>
+            <View style={styles.ratingStarsRow}>
+              {Array.from({ length: rating }).map((_, index) => (
+                <FontAwesome key={index} name="star" size={9} color="#ffd700" />
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.courseTitle} numberOfLines={2}>
+        {course.courseName || "Untitled Course"}
+      </Text>
+    </Pressable>
+  );
+});
+
+const CategoryRail = memo(function CategoryRail({
+  category,
+  onOpenCourse,
+}: CourseRailProps) {
+  const renderCourse = useCallback(
+    ({ item }: { item: any }) => (
+      <CourseCard course={item} onOpenCourse={onOpenCourse} />
+    ),
+    [onOpenCourse]
+  );
+
+  return (
+    <View style={styles.categoryCard}>
+      <Text style={styles.categoryTitle}>{category.name}</Text>
+      <FlatList
+        data={category.courses}
+        horizontal
+        keyExtractor={(item) => item.id}
+        renderItem={renderCourse}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.coursesScrollContent}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        removeClippedSubviews
+        getItemLayout={(_, index) => ({
+          length: 132,
+          offset: 132 * index,
+          index,
+        })}
+      />
+    </View>
+  );
+});
+
 export default function HomeScreen() {
   const router = useRouter();
 
   const [categories, setCategories] = useState<any[]>([]);
-  const [topMedia, setTopMedia] = useState<any[]>([]);
   const [feedbackImages, setFeedbackImages] = useState<FeedbackImageItem[]>([]);
-  const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
+  const [, setCurrentFeedbackIndex] = useState(0);
   const [feedbackWidth, setFeedbackWidth] = useState(0);
-  const feedbackScrollRef = useRef<ScrollView | null>(null);
+  const feedbackScrollRef = useRef<FlatList<FeedbackImageItem> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [isListScrolling, setIsListScrolling] = useState(false);
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === "active");
 
   const loadHomeData = useCallback(async () => {
     try {
-      const [categoryRows, topMediaRows, images] = await Promise.all([
+      const [categoryRows, images] = await Promise.all([
         listHomeCategories(),
-        listHomeTopMedia().catch((error) => {
-          console.log("Load top media error:", error);
-          return [];
-        }),
         listFeedbackImages().catch((error) => {
           console.log("Load feedback images error:", error);
           return [];
@@ -81,7 +173,6 @@ export default function HomeScreen() {
       ]);
 
       setCategories(categoryRows);
-      setTopMedia(topMediaRows);
       setFeedbackImages(images);
     } catch (error) {
       console.log("Load courses error:", error);
@@ -96,15 +187,16 @@ export default function HomeScreen() {
     }, [loadHomeData])
   );
 
-  const groupedCategories = useMemo(() => categories, [categories]);
-
-  const normalizeSortOrder = (value: number | string | undefined | null) => {
-    if (value === null || value === undefined || value === "") {
-      return 999999;
-    }
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : 999999;
-  };
+  const groupedCategories = useMemo(
+    () =>
+      categories.map((category) => ({
+        ...category,
+        courses: [...(category.courses || [])].sort(
+          (a, b) => normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder)
+        ),
+      })),
+    [categories]
+  );
 
   useEffect(() => {
     if (!feedbackImages.length || !feedbackWidth) {
@@ -114,9 +206,8 @@ export default function HomeScreen() {
     const interval = setInterval(() => {
       setCurrentFeedbackIndex((current) => {
         const nextIndex = (current + 1) % feedbackImages.length;
-        feedbackScrollRef.current?.scrollTo({
-          x: nextIndex * feedbackWidth,
-          y: 0,
+        feedbackScrollRef.current?.scrollToIndex({
+          index: nextIndex,
           animated: true,
         });
         return nextIndex;
@@ -126,24 +217,41 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [feedbackImages, feedbackWidth]);
 
-  const currentFeedback = feedbackImages[currentFeedbackIndex];
-
-  // ✅ VIDEO PLAYER USING LOCAL FILE
-  const [isFinished, setIsFinished] = useState(false);
-
   const featuredVideoPlayer = useVideoPlayer(localIntroVideo, (player) => {
-    player.loop = true;        // ❌ no loop
-    player.muted = false;       // 🔊 sound ON
-    player.play();              // ▶️ autoplay
-
-    player.addListener("playToEnd", () => {
-      setIsFinished(true);      // ✅ show replay button
-    });
+    player.loop = true;
+    player.muted = true;
   });
 
-  const openCourse = (courseId: string) => {
+  useFocusEffect(
+    useCallback(() => {
+      featuredVideoPlayer.play();
+      return () => featuredVideoPlayer.pause();
+    }, [featuredVideoPlayer])
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const active = nextState === "active";
+      setIsAppActive(active);
+      if (!active) {
+        featuredVideoPlayer.pause();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [featuredVideoPlayer]);
+
+  useEffect(() => {
+    if (isListScrolling || !isAppActive) {
+      featuredVideoPlayer.pause();
+    } else {
+      featuredVideoPlayer.play();
+    }
+  }, [featuredVideoPlayer, isAppActive, isListScrolling]);
+
+  const openCourse = useCallback((courseId: string) => {
     router.push(`/course/${courseId}`);
-  };
+  }, [router]);
 
   const openWhatsappHelp = () => {
     void Linking.openURL(whatsappHelpUrl);
@@ -152,6 +260,36 @@ export default function HomeScreen() {
   const openExternalUrl = (url: string) => {
     void Linking.openURL(url);
   };
+
+  const handleScrollBegin = useCallback(() => {
+    setIsListScrolling(true);
+  }, []);
+
+  const handleScrollEnd = useCallback(() => {
+    setIsListScrolling(false);
+  }, []);
+
+  const renderCategory = useCallback(
+    ({ item }: { item: any }) => (
+      <CategoryRail category={item} onOpenCourse={openCourse} />
+    ),
+    [openCourse]
+  );
+
+  const renderFeedbackImage = useCallback(
+    ({ item }: { item: FeedbackImageItem }) => (
+      <View style={[styles.feedbackImageWrap, { width: feedbackWidth || 1 }]}>
+        <ExpoImage
+          source={{ uri: item.imageUrl }}
+          style={styles.feedbackImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={120}
+        />
+      </View>
+    ),
+    [feedbackWidth]
+  );
 
   if (loading) {
     return (
@@ -170,9 +308,13 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews
-        maxToRenderPerBatch={3}
+        maxToRenderPerBatch={2}
         updateCellsBatchingPeriod={50}
-        initialNumToRender={3}
+        initialNumToRender={2}
+        windowSize={5}
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        onScrollEndDrag={handleScrollEnd}
         ListHeaderComponent={
           <View>
             <View style={styles.headerRow}>
@@ -206,12 +348,24 @@ export default function HomeScreen() {
 
 
             <View style={styles.heroPlane}>
-              <ScrollView
+              <FlatList
                 ref={feedbackScrollRef}
+                data={feedbackImages}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 snapToAlignment="center"
+                keyExtractor={(item) => item.id}
+                renderItem={renderFeedbackImage}
+                initialNumToRender={1}
+                maxToRenderPerBatch={1}
+                windowSize={3}
+                removeClippedSubviews
+                getItemLayout={(_, index) => ({
+                  length: feedbackWidth || 1,
+                  offset: (feedbackWidth || 1) * index,
+                  index,
+                })}
                 onMomentumScrollEnd={({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
                   if (!feedbackWidth) {
                     return;
@@ -220,66 +374,11 @@ export default function HomeScreen() {
                   setCurrentFeedbackIndex(index);
                 }}
                 onLayout={({ nativeEvent }) => setFeedbackWidth(nativeEvent.layout.width)}
-              >
-                {feedbackImages.map((item) => (
-                  <View key={item.id} style={[styles.feedbackImageWrap, { width: feedbackWidth || "100%" }]}> 
-                    <Image
-                      source={{ uri: item.imageUrl }}
-                      style={styles.feedbackImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                ))}
-              </ScrollView>
+              />
             </View>
           </View>
         }
-        renderItem={({ item }) => {
-          const sortedCourses = [...item.courses].sort((a, b) => normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder));
-          return (
-            <View style={styles.categoryCard}>
-              <Text style={styles.categoryTitle}>{item.name}</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.coursesScrollContent}
-              >
-                {sortedCourses.map((course) => (
-                  <Pressable
-                    key={course.id}
-                    style={styles.courseCard}
-                    onPress={() => openCourse(course.id)}
-                  >
-                    <View style={styles.courseImageContainer}>
-                      {course.imageUrl ? (
-                        <Image
-                          source={{ uri: course.imageUrl }}
-                          style={styles.courseImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={[styles.courseImage, styles.courseImagePlaceholder]} />
-                      )}
-                      {Number(course.rating) > 0 ? (
-                        <View style={styles.ratingOverlay}>
-                          <View style={styles.ratingStarsRow}>
-                            {Array.from({ length: Math.min(Math.round(Number(course.rating) || 0), 5) }).map((_, index) => (
-                              <FontAwesome key={index} name="star" size={9} color="#ffd700" />
-                            ))}
-                          </View>
-                          <Text style={styles.ratingText}>{'★'.repeat(Math.floor(course.rating || 0))}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.courseTitle} numberOfLines={2}>
-                      {course.courseName || "Untitled Course"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          );
-        }}
+        renderItem={renderCategory}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyTitle}>No categories found</Text>

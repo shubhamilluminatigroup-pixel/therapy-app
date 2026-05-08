@@ -35,6 +35,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-android-secure-capture",
       [
         "expo-splash-screen",
         {

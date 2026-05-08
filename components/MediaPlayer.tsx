@@ -4,12 +4,18 @@ import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { downloadProtectedMedia, getCachedMediaUri } from "../lib/mediaCache";
+import {
+  getScreenOffState,
+  refreshScreenOffState,
+  subscribeToScreenState,
+} from "../lib/screenState";
 import { useAuthUid } from "../lib/useAuth";
 
 type MediaPlayerProps = {
@@ -77,6 +83,8 @@ function LoadedMediaSurfaceComponent({
   const latestDurationRef = useRef(duration);
   const pendingPlayRef = useRef(false);
   const progressCallbackRef = useRef(onProgressUpdate);
+  const appActiveRef = useRef(AppState.currentState === "active");
+  const screenOffRef = useRef(getScreenOffState());
 
   const playerSource = useMemo(() => buildPlayerSource(mediaUri), [mediaUri]);
   const player = useVideoPlayer(playerSource, (videoPlayer) => {
@@ -105,6 +113,40 @@ function LoadedMediaSurfaceComponent({
   }, [onProgressUpdate]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const isActive = nextState === "active";
+      appActiveRef.current = isActive;
+
+      if (!isActive) {
+        void refreshScreenOffState().then((isScreenOff) => {
+          screenOffRef.current = isScreenOff;
+
+          if (!isScreenOff) {
+            pendingPlayRef.current = false;
+            setPendingPlay(false);
+            setIsPlaying(false);
+            player.pause();
+          }
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [player]);
+
+  useEffect(() => {
+    void refreshScreenOffState().then((isScreenOff) => {
+      screenOffRef.current = isScreenOff;
+    });
+
+    const subscription = subscribeToScreenState(({ isScreenOff }) => {
+      screenOffRef.current = isScreenOff;
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     if (isCompleted) {
       setHasEnded(true);
     }
@@ -122,10 +164,13 @@ function LoadedMediaSurfaceComponent({
         if (status === "readyToPlay") {
           setIsLoaded(true);
           setLoadError(null);
-          if (pendingPlayRef.current) {
+          if (pendingPlayRef.current && appActiveRef.current) {
             pendingPlayRef.current = false;
             setPendingPlay(false);
             player.play();
+          } else if (!appActiveRef.current && !screenOffRef.current) {
+            pendingPlayRef.current = false;
+            setPendingPlay(false);
           }
         }
 
@@ -172,6 +217,10 @@ function LoadedMediaSurfaceComponent({
   }, [isPlaying, onProgressUpdate, position, resolvedDuration, uid]);
 
   const togglePlayback = () => {
+    if (AppState.currentState !== "active") {
+      return;
+    }
+
     if (loadError) {
       Alert.alert("Playback error", loadError);
       return;

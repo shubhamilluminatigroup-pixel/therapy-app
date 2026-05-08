@@ -1,6 +1,10 @@
 import Slider from "@react-native-community/slider";
 import React, { memo, useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  refreshScreenOffState,
+  subscribeToScreenState,
+} from "../lib/screenState";
 import { useAuthUid } from "../lib/useAuth";
 
 type AudioPlayerProps = {
@@ -25,6 +29,28 @@ function AudioPlayerComponent({
   const [position, setPosition] = useState(initialPosition);
   const [isSeeking, setIsSeeking] = useState(false);
   const uid = useAuthUid();
+
+  useEffect(() => {
+    void refreshScreenOffState();
+
+    const subscription = subscribeToScreenState(() => {});
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        void refreshScreenOffState().then((isScreenOff) => {
+          if (!isScreenOff) {
+            setIsPlaying(false);
+          }
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (!isPlaying || isSeeking) return;
@@ -53,6 +79,7 @@ function AudioPlayerComponent({
 
   const togglePlayback = async () => {
     if (!audioUrl) return;
+    if (AppState.currentState !== "active") return;
     setIsPlaying((current) => !current);
   };
 

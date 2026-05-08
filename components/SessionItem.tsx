@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Session, SessionProgress } from "../types/sessions";
 import MediaPlayer from "./MediaPlayer";
@@ -16,9 +16,9 @@ function SessionItemComponent({
 }: SessionItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleProgressUpdate = (position: number, completed: boolean, totalDuration?: number) => {
+  const handleProgressUpdate = useCallback((position: number, completed: boolean, totalDuration?: number) => {
     onProgressUpdate(session.id, position, completed, totalDuration);
-  };
+  }, [onProgressUpdate, session.id]);
 
   const actualDuration = progress?.totalDuration || session.duration;
   const completionPercentage =
@@ -188,6 +188,17 @@ const styles = StyleSheet.create({
   },
 });
 
-const SessionItem = memo(SessionItemComponent);
+const SessionItem = memo(SessionItemComponent, (prev, next) => {
+  const prevProgress = prev.progress;
+  const nextProgress = next.progress;
+
+  return (
+    prev.session === next.session &&
+    prev.onProgressUpdate === next.onProgressUpdate &&
+    prevProgress?.completed === nextProgress?.completed &&
+    prevProgress?.lastPosition === nextProgress?.lastPosition &&
+    prevProgress?.totalDuration === nextProgress?.totalDuration
+  );
+});
 
 export default SessionItem;

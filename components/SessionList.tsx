@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { listCourseSessions } from "../lib/api";
 import { getCourseProgress, saveSessionProgress } from "../lib/progressStore";
@@ -22,17 +22,7 @@ export default function SessionList({
   const [sessionProgress, setSessionProgress] = useState<SessionProgress>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    void loadSessions();
-  }, [courseId]);
-
-  useEffect(() => {
-    if (courseId) {
-      void loadSessionProgress();
-    }
-  }, [courseId, enrollmentId, uid]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       setLoading(true);
       const sessionsData = (await listCourseSessions(courseId))
@@ -45,15 +35,20 @@ export default function SessionList({
     } finally {
       setLoading(false);
     }
-  };
+  }, [courseId]);
 
-  const loadSessionProgress = async () => {
+  const loadSessionProgress = useCallback(async () => {
     const storedProgress = await getCourseProgress(courseId, uid);
     setSessionProgress(storedProgress);
-  };
+  }, [courseId, uid]);
 
-  const handleProgressUpdate = (sessionId: string, position: number, completed: boolean, loadedDuration?: number) => {
-    const sessionDuration = sessions.find((s) => s.id === sessionId)?.duration || 0;
+  const sessionDurationById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session.duration || 0])),
+    [sessions]
+  );
+
+  const handleProgressUpdate = useCallback((sessionId: string, position: number, completed: boolean, loadedDuration?: number) => {
+    const sessionDuration = sessionDurationById.get(sessionId) || 0;
     const totalDuration = loadedDuration || sessionDuration;
     setSessionProgress((prev) => {
       const previous = prev[sessionId];
@@ -83,7 +78,22 @@ export default function SessionList({
     if (onProgressUpdate) {
       onProgressUpdate(sessionId, position, completed, totalDuration);
     }
-  };
+  }, [courseId, onProgressUpdate, sessionDurationById, uid]);
+
+  const completedSessions = useMemo(
+    () => Object.values(sessionProgress).filter((p) => p.completed).length,
+    [sessionProgress]
+  );
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    if (courseId) {
+      void loadSessionProgress();
+    }
+  }, [courseId, enrollmentId, loadSessionProgress]);
 
   if (loading) {
     return (
@@ -102,7 +112,6 @@ export default function SessionList({
     );
   }
 
-  const completedSessions = Object.values(sessionProgress).filter((p) => p.completed).length;
   const totalSessions = sessions.length;
 
   return (

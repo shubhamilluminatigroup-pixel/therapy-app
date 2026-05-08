@@ -1,9 +1,9 @@
+import { Image as ExpoImage } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -92,7 +92,7 @@ export default function CourseDetailScreen() {
     Alert.alert("Payment Pending", "Payment is not completed yet. You can reopen the payment sheet and check status again.");
   };
 
-  const handleSessionProgressUpdate = async (sessionId: string, position: number, completed: boolean) => {
+  const handleSessionProgressUpdate = useCallback(async (sessionId: string, position: number, completed: boolean) => {
     if (!course?.id) return;
 
     try {
@@ -105,7 +105,7 @@ export default function CourseDetailScreen() {
     } catch (error) {
       console.log("Update session progress error:", error);
     }
-  };
+  }, [course?.id]);
 
   const handleEnroll = async () => {
     if (!course || enrolling || isEnrolled) return;
@@ -171,17 +171,24 @@ export default function CourseDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        removeClippedSubviews
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
         <Pressable style={styles.topBackRow} onPress={() => router.back()}>
           <Text style={styles.topBackText}>{"<- Back"}</Text>
         </Pressable>
 
         <View style={styles.courseCard}>
           {course.imageUrl ? (
-            <Image
+            <ExpoImage
               source={{ uri: course.imageUrl }}
               style={styles.courseImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={120}
             />
           ) : null}
 
