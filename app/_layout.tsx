@@ -1,6 +1,8 @@
 import { Stack } from "expo-router";
+import { usePreventScreenCapture } from "expo-screen-capture";
 
 export default function RootLayout() {
+  usePreventScreenCapture();
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -19,3 +21,5 @@ export default function RootLayout() {
     </Stack>
   );
 }
+
+
