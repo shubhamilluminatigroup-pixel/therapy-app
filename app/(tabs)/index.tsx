@@ -67,6 +67,10 @@ const normalizeSortOrder = (value: number | string | undefined | null) => {
   return Number.isFinite(numberValue) ? numberValue : 999999;
 };
 
+const COURSE_CARD_WIDTH = 220;
+const COURSE_CARD_SPACING = 6;
+const COURSE_ITEM_LENGTH = COURSE_CARD_WIDTH + COURSE_CARD_SPACING;
+
 type CourseRailProps = {
   category: any;
   onOpenCourse: (courseId: string) => void;
@@ -93,7 +97,7 @@ const CourseCard = memo(function CourseCard({
             style={styles.courseImage}
             contentFit="cover"
             cachePolicy="memory-disk"
-            transition={120}
+            recyclingKey={course.id}
           />
         ) : (
           <View style={[styles.courseImage, styles.courseImagePlaceholder]} />
@@ -141,8 +145,8 @@ const CategoryRail = memo(function CategoryRail({
         windowSize={5}
         removeClippedSubviews
         getItemLayout={(_, index) => ({
-          length: 132,
-          offset: 132 * index,
+          length: COURSE_ITEM_LENGTH,
+          offset: COURSE_ITEM_LENGTH * index,
           index,
         })}
       />
@@ -593,18 +597,18 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   courseCard: {
-    width: 120,
-    marginRight: 12,
+    width: COURSE_CARD_WIDTH,
+    marginRight: COURSE_CARD_SPACING,
     alignItems: "center",
   },
   courseImageContainer: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   courseImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-    backgroundColor: "#e5e7eb",
+    width: COURSE_CARD_WIDTH,
+    height: COURSE_CARD_WIDTH,
+    borderRadius: 10,
+    backgroundColor: "#acaeb3",
   },
   courseImagePlaceholder: {
     justifyContent: 'center',
