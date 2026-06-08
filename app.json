@@ -1,8 +1,5 @@
 {
   "expo": {
-    "name": "MRC Therapy 2.0",
-    "slug": "mrc-therapy-2",
-
     "name": "MRC Therapy App",
     "slug": "therapy-app",
     "version": "1.0.0",
@@ -15,19 +12,25 @@
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
+          "audio",
           "audio"
-        ]
-      }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.mrcayurveda.therappy"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/icon.png"
-         
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.mrcayurveda.therappy"
+      "package": "com.mrcayurveda.therappy",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "output": "static",
@@ -67,18 +70,18 @@
       }
     },
     "expo": {
-    "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
+      "plugins": [
+        [
+          "expo-build-properties",
+          {
+            "android": {
+              "compileSdkVersion": 34,
+              "targetSdkVersion": 34,
+              "buildToolsVersion": "34.0.0"
+            }
           }
-        }
+        ]
       ]
-    ]
-  }
+    }
   }
 }

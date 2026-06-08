@@ -51,6 +51,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="policy"
+        options={{
+          title: "Policy",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="policy" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="contact"
+        options={{
+          title: "Contact",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="contact-support" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="admin"
         options={{
           title: "Admin",
