@@ -22,7 +22,7 @@ We reserve the right to update or modify these terms and conditions at any time 
 
 5. Contact Information
 If you have any questions or concerns regarding these terms, please contact us at:
-Email: mrcayurvedareseachcenter@gmail.com
+Email: mrcayurvedacenter@gmail.com
 Phone: 7351154123`
   },
   {
@@ -36,7 +36,7 @@ We do not offer any refunds for services purchased from our website.
 
 Contact Us
 If you have any questions about our No Cancellation and Refund Policy, please contact us:
-Email: mrcayurvedareseachcenter@gmail.com
+Email: mrcayurvedacenter@gmail.com
 Phone: 7351154123`
   },
   {

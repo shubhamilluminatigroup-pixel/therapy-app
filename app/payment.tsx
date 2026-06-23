@@ -10,34 +10,27 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PaymentScreen() {
   const {
-    redirectUrl,
     merchantReferenceId,
     amount,
     courseName,
-    browserOpened: browserOpenedParam,
-    transactionStatus,
-    transactionError,
+    redirectUrl,
   } = useLocalSearchParams<{
-    redirectUrl?: string;
     merchantReferenceId?: string;
     amount?: string;
     courseName?: string;
-    browserOpened?: string;
-    transactionStatus?: string;
-    transactionError?: string;
+    redirectUrl?: string;
   }>();
 
   const [paymentState, setPaymentState] = useState("PENDING");
   const [paymentMessage, setPaymentMessage] = useState("Waiting for the payment confirmation...");
   const [checkingPayment, setCheckingPayment] = useState(false);
-  const [openingBrowser, setOpeningBrowser] = useState(false);
-  const [browserOpened, setBrowserOpened] = useState(browserOpenedParam === "1");
+  const [processingPayment, setProcessingPayment] = useState(false);
   const statusTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const completePayment = useCallback(async () => {
@@ -57,57 +50,42 @@ export default function PaymentScreen() {
     setPaymentMessage(
       nextState === "COMPLETED"
         ? "Payment completed successfully."
-        : nextState === "FAILED" || nextState === "EXPIRED"
-        ? `Payment ${nextState.toLowerCase()}.`
-        : "Complete your payment in the browser, then return here."
+        : nextState === "FAILED" || nextState === "EXPIRED" || nextState === "CANCELLED"
+        ? `Payment ${nextState.toLowerCase()}. You can try again.`
+        : "Your payment is being processed..."
     );
+    
+    // Reset processing flag when payment fails/cancels so user can retry
+    if (nextState === "FAILED" || nextState === "CANCELLED" || nextState === "EXPIRED") {
+      setProcessingPayment(false);
+    }
+    
     return nextState;
   }, [merchantReferenceId]);
 
-  const openPaymentBrowser = useCallback(async () => {
-    if (!redirectUrl || openingBrowser) return;
+  const initiatePhonePePayment = useCallback(async () => {
+    if (!merchantReferenceId || !amount || !redirectUrl) return;
     try {
-      setOpeningBrowser(true);
-      setPaymentMessage("Opening the payment page in your browser...");
+      setProcessingPayment(true);
+      setPaymentMessage("Opening PhonePe checkout...");
 
-      if (
-        redirectUrl.includes("api.phonepe.com/apis/pg/checkout/ui/") &&
-        !redirectUrl.includes("token=")
-      ) {
-        throw new Error("PhonePe returned an invalid checkout link (missing token).");
-      }
+      console.log("Opening PhonePe checkout:", redirectUrl);
 
       const canOpen = await Linking.canOpenURL(redirectUrl);
-      if (!canOpen) throw new Error("Unable to open payment URL");
-      await Linking.openURL(redirectUrl);
-      setBrowserOpened(true);
-      setPaymentMessage("The payment page is open in your browser. Return here after completing payment.");
+      if (canOpen) {
+        await Linking.openURL(redirectUrl);
+        setPaymentMessage("PhonePe checkout opened in browser. Complete payment and return.");
+        // Don't set processingPayment to false here - wait for user to return
+      } else {
+        throw new Error("Unable to open PhonePe checkout");
+      }
     } catch (error) {
-      console.log("Open payment browser error:", error);
-      Alert.alert("Payment page error", "Unable to open the payment page in the browser.");
-    } finally {
-      setOpeningBrowser(false);
+      console.log("Initiate payment error:", error);
+      setPaymentMessage(`Error: ${error instanceof Error ? error.message : "Unable to open checkout"}`);
+      setProcessingPayment(false);
+      Alert.alert("Payment Error", error instanceof Error ? error.message : "Unable to initiate payment");
     }
-  }, [openingBrowser, redirectUrl]);
-
-  useEffect(() => {
-    if (!redirectUrl || browserOpened) return;
-    void openPaymentBrowser();
-  }, [browserOpened, openPaymentBrowser, redirectUrl]);
-
-  useEffect(() => {
-    if (transactionStatus === "SUCCESS") {
-      setPaymentMessage("PhonePe returned control to the app. Checking your payment confirmation now.");
-      return;
-    }
-    if (transactionStatus === "FAILURE" || transactionStatus === "INTERRUPTED" || transactionStatus === "INTERUPTED") {
-      setPaymentMessage(transactionError || "The PhonePe checkout was interrupted. You can retry or check the status.");
-      return;
-    }
-    if (transactionStatus === "BROWSER_FALLBACK") {
-      setPaymentMessage(transactionError || "Native checkout was unavailable, so the browser fallback has been opened.");
-    }
-  }, [transactionError, transactionStatus]);
+  }, [merchantReferenceId, amount, redirectUrl]);
 
   useEffect(() => {
     if (!merchantReferenceId) return;
@@ -122,7 +100,7 @@ export default function PaymentScreen() {
           statusTimer.current = null;
           await completePayment();
         }
-        if (nextState === "FAILED" || nextState === "EXPIRED") {
+        if (nextState === "FAILED" || nextState === "EXPIRED" || nextState === "CANCELLED") {
           clearInterval(statusTimer.current!);
           statusTimer.current = null;
         }
@@ -164,7 +142,7 @@ export default function PaymentScreen() {
     }
   };
 
-  if (!merchantReferenceId && !redirectUrl) {
+  if (!merchantReferenceId || !amount || !redirectUrl) {
     return (
       <SafeAreaView style={styles.center}>
         <Text style={styles.title}>Payment page unavailable</Text>
@@ -195,28 +173,33 @@ export default function PaymentScreen() {
       </View>
 
       <View style={styles.content}>
-        <View style={styles.browserCard}>
-          <Text style={styles.sectionTitle}>PhonePe Checkout</Text>
+        <View style={styles.sdkCard}>
+          <Text style={styles.sectionTitle}>PhonePe Payment</Text>
           <Text style={styles.helperText}>
-            {redirectUrl
-              ? "The payment page has been opened in your browser. Complete the payment there, then return here."
-              : "This order was started through the PhonePe SDK. Use the status check below while the backend confirms the payment."}
+            {paymentState === "COMPLETED"
+              ? "✓ Payment completed successfully!"
+              : paymentState === "FAILED" || paymentState === "CANCELLED" || paymentState === "EXPIRED"
+              ? "Payment was not completed. Please try again."
+              : `Click the button below to pay Rs ${amount || "0.00"} via PhonePe`}
           </Text>
-          {redirectUrl ? (
+          {paymentState !== "COMPLETED" && (
             <TouchableOpacity
-              style={[styles.openButton, openingBrowser && styles.disabledButton]}
-              onPress={() => void openPaymentBrowser()}
-              disabled={openingBrowser}
+              style={[styles.paymentButton, processingPayment && styles.disabledButton]}
+              onPress={() => void initiatePhonePePayment()}
+              disabled={processingPayment}
             >
-              {openingBrowser ? (
-                <ActivityIndicator color="#ffffff" />
+              {processingPayment ? (
+                <>
+                  <ActivityIndicator color="#ffffff" />
+                  <Text style={styles.paymentButtonText}>Opening PhonePe...</Text>
+                </>
+              ) : paymentState === "FAILED" || paymentState === "CANCELLED" || paymentState === "EXPIRED" ? (
+                <Text style={styles.paymentButtonText}>Retry Payment - Rs {amount || "0.00"}</Text>
               ) : (
-                <Text style={styles.openButtonText}>
-                  {browserOpened ? "Reopen Payment Page" : "Open Payment Page"}
-                </Text>
+                <Text style={styles.paymentButtonText}>Pay Rs {amount || "0.00"}</Text>
               )}
             </TouchableOpacity>
-          ) : null}
+          )}
         </View>
 
         <View style={styles.statusCard}>
@@ -265,7 +248,7 @@ const styles = StyleSheet.create({
   amountText: { fontSize: 18, fontWeight: "800", color: "#0f172a" },
   courseText: { marginTop: 2, fontSize: 13, color: "#475569" },
   content: { flex: 1, padding: 16, gap: 16 },
-  browserCard: {
+  sdkCard: {
     backgroundColor: "#ffffff", borderRadius: 18, padding: 18,
     borderWidth: 1, borderColor: "#e2e8f0",
   },
@@ -277,11 +260,11 @@ const styles = StyleSheet.create({
   statusValue: { fontSize: 15, fontWeight: "800", color: "#2563eb" },
   referenceText: { marginTop: 10, fontSize: 12, color: "#475569" },
   helperText: { marginTop: 10, fontSize: 13, lineHeight: 19, color: "#64748b" },
-  openButton: {
-    marginTop: 16, backgroundColor: "#0f172a", borderRadius: 14,
-    paddingVertical: 14, alignItems: "center",
+  paymentButton: {
+    marginTop: 16, backgroundColor: "#2563eb", borderRadius: 14,
+    paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10,
   },
-  openButtonText: { color: "#ffffff", fontSize: 15, fontWeight: "800" },
+  paymentButtonText: { color: "#ffffff", fontSize: 15, fontWeight: "800" },
   footer: { padding: 16, backgroundColor: "#ffffff", borderTopWidth: 1, borderTopColor: "#e2e8f0" },
   checkButton: { backgroundColor: "#0f172a", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   checkButtonText: { color: "#ffffff", fontSize: 15, fontWeight: "800" },

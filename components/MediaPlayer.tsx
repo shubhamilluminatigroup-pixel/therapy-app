@@ -116,19 +116,11 @@ function LoadedMediaSurfaceComponent({
     const subscription = AppState.addEventListener("change", (nextState) => {
       const isActive = nextState === "active";
       appActiveRef.current = isActive;
-
-      if (!isActive) {
-        void refreshScreenOffState().then((isScreenOff) => {
-          screenOffRef.current = isScreenOff;
-
-          if (!isScreenOff) {
-            pendingPlayRef.current = false;
-            setPendingPlay(false);
-            setIsPlaying(false);
-            player.pause();
-          }
-        });
+       
+      if (mediaType === "video" && nextState !== "active") {
+      player.pause();
       }
+     
     });
 
     return () => subscription.remove();

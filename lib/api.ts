@@ -1,12 +1,12 @@
 import {
-  AppUser,
-  Course,
-  CourseItem,
-  FeedbackImageItem,
-  HomeCategoryGroup,
-  HomeTopMediaItem,
-  MyCourseItem,
-  Session
+    AppUser,
+    Course,
+    CourseItem,
+    FeedbackImageItem,
+    HomeCategoryGroup,
+    HomeTopMediaItem,
+    MyCourseItem,
+    Session
 } from "@/types/backend";
 import { clearAuthSession, getAuthToken, getCurrentUser, setAuthSession } from "./authStore";
 import { loadCachedOrFetch } from "./offlineCache";
@@ -477,6 +477,9 @@ export async function initiateAppPayment(params: { courseId: string; month: numb
   const formData = new FormData();
   formData.append("month", String(params.month));
   if (params.couponCode) formData.append("coupon_code", params.couponCode);
+  
+  // Add return URL for payment gateway callback
+  formData.append("return_url", "therapyapp://payment-return");
   
   const user = getCurrentUser();
   if (user) formData.append("user_id", user.uid);

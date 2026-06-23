@@ -8,8 +8,23 @@
     "scheme": "therapyapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "extra": {
+      "router": {
+        "origin": false,
+        "routes": {
+          "payment-return": {
+            "name": "payment-return",
+            "path": "payment-return"
+          }
+        }
+      },
+      "eas": {
+        "projectId": "a6b69d6d-dff5-44fc-915e-fe0e9af67d09"
+      }
+    },
     "ios": {
       "supportsTablet": true,
+      "scheme": ["therapyapp", "therapy"],
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
@@ -24,12 +39,19 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/icon.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "scheme": ["therapyapp", "therapy"],
       "package": "com.mrcayurveda.therappy",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        
       ]
     },
     "web": {
@@ -57,7 +79,17 @@
           "supportsBackgroundPlayback": true
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -68,20 +100,6 @@
       "eas": {
         "projectId": "a6b69d6d-dff5-44fc-915e-fe0e9af67d09"
       }
-    },
-    "expo": {
-      "plugins": [
-        [
-          "expo-build-properties",
-          {
-            "android": {
-              "compileSdkVersion": 34,
-              "targetSdkVersion": 34,
-              "buildToolsVersion": "34.0.0"
-            }
-          }
-        ]
-      ]
     }
   }
 }

@@ -2,26 +2,25 @@ import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  applyCouponCode,
-  enrollInCourse,
-  getServicePrice,
-  initiateAppPayment,
-  listServiceMonths,
+    applyCouponCode,
+    enrollInCourse,
+    getServicePrice,
+    initiateAppPayment,
+    listServiceMonths,
 } from "../lib/api";
 import { Course } from "../types/backend";
 
@@ -171,44 +170,34 @@ export default function CartCheckoutModal({
       });
 
       const referenceId = data.merchant_reference_id || "";
-      const nextRedirectUrl = data.redirectUrl || "";
+      const redirectUrl = data.redirectUrl || "";
 
-      if (!nextRedirectUrl) {
-        Alert.alert(
-          "Payment started",
-          "The payment request was created, but the gateway page was not returned."
-        );
-        onPaymentFailure();
-        return;
-      }
-
-      if (
-        nextRedirectUrl.includes("api.phonepe.com/apis/pg/checkout/ui/") &&
-        !nextRedirectUrl.includes("token=")
-      ) {
+      if (!referenceId) {
         Alert.alert(
           "Payment error",
-          "PhonePe returned an invalid checkout link (missing token). Please try again after some time."
+          "The payment request was created, but no reference ID was returned. Please try again."
         );
         onPaymentFailure();
         return;
       }
 
-      const canOpen = await Linking.canOpenURL(nextRedirectUrl);
-      if (!canOpen) {
-        throw new Error("Unable to open website checkout");
+      if (!redirectUrl) {
+        Alert.alert(
+          "Payment error",
+          "The payment gateway URL was not generated. Please try again."
+        );
+        onPaymentFailure();
+        return;
       }
 
-      await Linking.openURL(nextRedirectUrl);
       onClose();
       router.push({
         pathname: "/payment",
         params: {
-          redirectUrl: nextRedirectUrl,
           merchantReferenceId: referenceId,
+          redirectUrl: redirectUrl,
           amount: String(data.amount ?? totalPrice.toFixed(2)),
           courseName: course.courseName || "Course Payment",
-          browserOpened: "1",
         },
       });
     } catch (error) {
@@ -472,9 +461,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 14,
-    overflow: "hidden",
+   
     backgroundColor: "#ffffff",
     marginBottom: 12,
+    height: 50,
+    justifyContent: "center",
   },
   loadingRow: {
     paddingVertical: 18,
