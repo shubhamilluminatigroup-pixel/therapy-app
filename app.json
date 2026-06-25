@@ -40,7 +40,7 @@
         "foregroundImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "scheme": ["therapyapp", "therapy"],
+      "scheme": ["therapyapp"],
       "package": "com.mrcayurveda.therappy",
       "permissions": [
         "android.permission.RECORD_AUDIO",

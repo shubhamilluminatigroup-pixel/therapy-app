@@ -2,33 +2,53 @@ import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-    applyCouponCode,
-    enrollInCourse,
-    getServicePrice,
-    initiateAppPayment,
-    listServiceMonths,
+  applyCouponCode,
+  enrollInCourse,
+  getServicePrice,
+  initiateAppPayment,
+  listServiceMonths,
 } from "../lib/api";
 import { Course } from "../types/backend";
+
+
 
 type ServiceMonthOption = {
   id: string;
   month: number;
   price: number;
 };
+
+function getPhonePePaymentMode(value: unknown) {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    "type" in value &&
+    typeof value.type === "string" &&
+    value.type.trim()
+  ) {
+    return value.type;
+  }
+
+  return "PAY_PAGE";
+}
 
 type CartCheckoutModalProps = {
   visible: boolean;
@@ -169,8 +189,16 @@ export default function CartCheckoutModal({
         couponCode: appliedCouponCode || couponCode.trim(),
       });
 
-      const referenceId = data.merchant_reference_id || "";
-      const redirectUrl = data.redirectUrl || "";
+      const referenceId =
+        data.merchant_reference_id || data.merchantReferenceId || "";
+      const orderId =
+        data.sdkOrderId || data.sdk_order_id || data.orderId || data.order_id || "";
+      const token =
+        data.sdkOrderToken ||
+        data.sdk_order_token ||
+        data.token ||
+        data.order_token ||
+        "";
 
       if (!referenceId) {
         Alert.alert(
@@ -181,23 +209,33 @@ export default function CartCheckoutModal({
         return;
       }
 
-      if (!redirectUrl) {
+      if (!orderId || !token) {
         Alert.alert(
           "Payment error",
-          "The payment gateway URL was not generated. Please try again."
+          "The SDK order ID or order token was not returned. Please try again."
         );
         onPaymentFailure();
         return;
       }
 
       onClose();
+
       router.push({
         pathname: "/payment",
         params: {
           merchantReferenceId: referenceId,
-          redirectUrl: redirectUrl,
+          orderId,
+          token,
           amount: String(data.amount ?? totalPrice.toFixed(2)),
           courseName: course.courseName || "Course Payment",
+          paymentMode: getPhonePePaymentMode(
+            data.paymentMode || data.payment_mode
+          ),
+          merchantId: data.merchantId || data.merchant_id || "",
+          phonePeEnvironment:
+            data.phonePeEnvironment || data.phonepe_environment || "",
+          targetAppPackageName:
+            data.targetAppPackageName || data.target_app_package_name || "",
         },
       });
     } catch (error) {

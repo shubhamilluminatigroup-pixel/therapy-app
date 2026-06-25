@@ -473,6 +473,30 @@ export async function applyCouponCode(params: { courseId: string; couponCode: st
   return response.coupon_data;
 }
 
+export type AppPaymentInitResponse = {
+  merchant_reference_id?: string;
+  merchantReferenceId?: string;
+  orderId?: string;
+  token?: string;
+  sdkOrderId?: string;
+  sdkOrderToken?: string;
+  sdk_order_id?: string;
+  sdk_order_token?: string;
+  order_id?: string;
+  order_token?: string;
+  amount?: number | string;
+  redirectUrl?: string;
+  redirect_url?: string;
+  paymentMode?: string | { type?: string };
+  payment_mode?: string | { type?: string };
+  merchantId?: string;
+  merchant_id?: string;
+  phonePeEnvironment?: string;
+  phonepe_environment?: string;
+  targetAppPackageName?: string;
+  target_app_package_name?: string;
+};
+
 export async function initiateAppPayment(params: { courseId: string; month: number; couponCode: string }) {
   const formData = new FormData();
   formData.append("month", String(params.month));
@@ -484,7 +508,7 @@ export async function initiateAppPayment(params: { courseId: string; month: numb
   const user = getCurrentUser();
   if (user) formData.append("user_id", user.uid);
 
-  return request<any>(`/app_buy_course_detail/${params.courseId}/`, {
+  return request<AppPaymentInitResponse>(`/app-buy-course-sdk/${params.courseId}/`, {
     method: "POST",
     body: formData,
   });
