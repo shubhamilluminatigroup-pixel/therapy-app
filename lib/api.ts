@@ -514,9 +514,19 @@ export async function initiateAppPayment(params: { courseId: string; month: numb
   });
 }
 
-export async function confirmAppPayment(merchantReferenceId: string) {
+export async function confirmAppPayment(
+  merchantReferenceId: string,
+  params?: { paymentState?: string; sdkStatus?: string }
+) {
   const formData = new FormData();
   formData.append("merchant_reference_id", merchantReferenceId);
+  if (params?.paymentState) {
+    formData.append("payment_state", params.paymentState);
+  }
+  if (params?.sdkStatus) {
+    formData.append("sdk_status", params.sdkStatus);
+  }
+
   return request("/app_payment_confirm/", {
     method: "POST",
     body: formData,

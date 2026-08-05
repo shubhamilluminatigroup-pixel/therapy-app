@@ -46,15 +46,29 @@ export default function PaymentScreen() {
   const [processingPayment, setProcessingPayment] = useState(false);
 
   const statusTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const paymentConfirmed = useRef(false);
   const resolvedMerchantId =
     merchantId || process.env.EXPO_PUBLIC_PHONEPE_MERCHANT_ID || "";
   const resolvedEnvironment =
     phonePeEnvironment || process.env.EXPO_PUBLIC_PHONEPE_ENVIRONMENT || "PRODUCTION";
 
-  const completePayment = useCallback(async () => {
-    if (!merchantReferenceId) return;
+  const completePayment = useCallback(async (sdkStatus?: string) => {
+    if (!merchantReferenceId || paymentConfirmed.current) return;
 
-    await confirmAppPayment(merchantReferenceId);
+    paymentConfirmed.current = true;
+
+    try {
+      await confirmAppPayment(merchantReferenceId, {
+        paymentState: "COMPLETED",
+        sdkStatus,
+      });
+    } catch (error) {
+      paymentConfirmed.current = false;
+      throw error;
+    }
+
+    setPaymentState("COMPLETED");
+    setPaymentMessage("Payment completed successfully.");
 
     Alert.alert(
       "Payment successful",
@@ -128,6 +142,11 @@ export default function PaymentScreen() {
 
       if (response?.status && response.status !== "SUCCESS") {
         throw new Error(response.error || `PhonePe returned ${response.status}`);
+      }
+
+      if (response?.status === "SUCCESS") {
+        await completePayment(response.status);
+        return;
       }
 
       setPaymentMessage(

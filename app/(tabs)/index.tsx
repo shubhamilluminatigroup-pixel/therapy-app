@@ -1,25 +1,25 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { Image as ExpoImage } from "expo-image";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  AppState,
-  FlatList,
-  Linking,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    AppState,
+    FlatList,
+    Linking,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  listFeedbackImages,
-  listHomeCategories,
+    listFeedbackImages,
+    listHomeCategories,
 } from "../../lib/api";
 import { FeedbackImageItem } from "../../types/backend";
 
@@ -221,17 +221,22 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [feedbackImages, feedbackWidth]);
 
+  const isFocused = useIsFocused();
+  const [isMuted, setIsMuted] = useState(false); // default unmuted
+
   const featuredVideoPlayer = useVideoPlayer(localIntroVideo, (player) => {
     player.loop = true;
-    player.muted = true;
+    player.muted = false;
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      featuredVideoPlayer.play();
-      return () => featuredVideoPlayer.pause();
-    }, [featuredVideoPlayer])
-  );
+  useEffect(() => {
+    // keep player muted state in sync with UI toggle
+    try {
+      featuredVideoPlayer.muted = isMuted;
+    } catch (e) {
+      // ignore if player not ready yet
+    }
+  }, [isMuted, featuredVideoPlayer]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -246,12 +251,12 @@ export default function HomeScreen() {
   }, [featuredVideoPlayer]);
 
   useEffect(() => {
-    if (isListScrolling || !isAppActive) {
+    if (!isFocused || !isAppActive || isListScrolling) {
       featuredVideoPlayer.pause();
     } else {
       featuredVideoPlayer.play();
     }
-  }, [featuredVideoPlayer, isAppActive, isListScrolling]);
+  }, [featuredVideoPlayer, isAppActive, isListScrolling, isFocused]);
 
   const openCourse = useCallback((courseId: string) => {
     router.push(`/course/${courseId}`);
@@ -347,6 +352,15 @@ export default function HomeScreen() {
                 style={styles.video}
                 contentFit="cover"
               />
+
+              <Pressable
+                accessibilityLabel={isMuted ? "Unmute video" : "Mute video"}
+                accessibilityRole="button"
+                onPress={() => setIsMuted((v) => !v)}
+                style={styles.muteButton}
+              >
+                <FontAwesome name={isMuted ? "volume-off" : "volume-up"} size={18} color="#fff" />
+              </Pressable>
             </View>
 
 
@@ -514,6 +528,16 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "#020617",
     borderRadius: 18,
+  },
+  muteButton: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 8,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   feedbackImageWrap: {
     width: "100%",
